@@ -1,0 +1,41 @@
+name: Release APK
+
+# Build the Android APK on every version tag and attach it to a GitHub Release.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed to create the release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      # Build the APK on EAS and wait for it, then download the artifact locally.
+      - name: Build APK
+        env:
+          EXPO_PUBLIC_TMDB_TOKEN: ${{ secrets.EXPO_PUBLIC_TMDB_TOKEN }}
+        run: |
+          eas build --platform android --profile production --non-interactive --wait \
+            --output ./mymedia-${{ github.ref_name }}.apk
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./mymedia-${{ github.ref_name }}.apk
+          generate_release_notes: true
