@@ -1,6 +1,6 @@
 import { colors } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
+import { router, Tabs } from 'expo-router';
 import { StyleSheet, View, type ColorValue } from 'react-native';
 
 type Ion = React.ComponentProps<typeof Ionicons>['name'];
@@ -40,7 +40,14 @@ export default function TabLayout() {
       <Tabs.Screen name="explore" options={{ title: 'Explore', tabBarIcon: icon('search') }} />
       <Tabs.Screen
         name="add"
-        options={{ title: '', tabBarIcon: addIcon, tabBarAccessibilityLabel: 'Add' }}
+        options={{ title: '', tabBarIcon: addIcon, tabBarAccessibilityLabel: 'Add song' }}
+        listeners={{
+          tabPress: (e) => {
+            // Open the manual-add form directly instead of showing a redundant screen.
+            e.preventDefault();
+            router.push('/manual');
+          },
+        }}
       />
       <Tabs.Screen name="library" options={{ title: 'Library', tabBarIcon: icon('albums') }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: icon('person') }} />

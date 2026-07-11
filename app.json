@@ -2,12 +2,12 @@
   "expo": {
     "name": "Mymedia",
     "slug": "Mymedia",
-    "version": "1.0.1",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mymedia",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#0e0f13",
+    "backgroundColor": "#000000",
     "ios": {
       "supportsTablet": true
     },
@@ -33,7 +33,7 @@
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#0e0f13"
+          "backgroundColor": "#000000"
         }
       ],
       "expo-system-ui",

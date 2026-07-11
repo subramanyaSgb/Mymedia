@@ -1,29 +1,29 @@
-// Dark-cinematic design tokens. Single source of truth — screens import from here,
-// never hardcode hex/spacing. Amber accent evokes cinema and avoids generic AI-purple/blue.
+// Stremio-inspired dark tokens: pitch-black base with a purple accent.
+// Single source of truth — screens import from here, never hardcode hex/spacing.
 
 export const colors = {
-  // Surfaces (charcoal, not pure black)
-  bg: '#0e0f13', // app background
-  surface: '#181a20', // cards, rows
-  surfaceHi: '#22252e', // raised / pressed / inputs
-  border: '#2a2e39',
+  // Surfaces — pitch black base, subtle raised layers
+  bg: '#000000', // app background (true black)
+  surface: '#0f0f12', // cards, rows
+  surfaceHi: '#1a1a1f', // raised / pressed / inputs
+  border: '#26262c',
 
   // Text
-  text: '#f4f5f7', // primary
-  textMuted: '#9aa0ad', // secondary (meets AA on bg)
-  textFaint: '#6b7280', // tertiary / disabled
+  text: '#f5f5f7', // primary
+  textMuted: '#a0a0aa', // secondary (meets AA on black)
+  textFaint: '#6a6a72', // tertiary / disabled
 
-  // Accent — warm amber
-  accent: '#f5a524',
-  accentDim: '#3a2e14', // accent tint surface
-  onAccent: '#1a1204', // text on accent
+  // Accent — Stremio purple/violet
+  accent: '#8c5cff',
+  accentDim: '#1c1330', // accent tint surface
+  onAccent: '#ffffff', // text on accent
 
   // Status
   success: '#4ade80',
   danger: '#f87171',
 
   // Poster placeholder
-  posterBg: '#22252e',
+  posterBg: '#141418',
 } as const;
 
 export const space = {

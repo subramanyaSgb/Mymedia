@@ -61,6 +61,8 @@ export async function deleteItem(id: number): Promise<void> {
 export const q = {
   byId: (id: number) => db.select().from(items).where(eq(items.id, id)),
   all: () => db.select().from(items).orderBy(desc(items.updatedAt)),
+  // Just the source ids in the library — used to mark search results as already added.
+  sourceIds: () => db.select({ source: items.source, sourceId: items.sourceId }).from(items),
   byCategory: (category: Category) =>
     db.select().from(items).where(eq(items.category, category)).orderBy(desc(items.updatedAt)),
   byStatus: (status: Status) =>

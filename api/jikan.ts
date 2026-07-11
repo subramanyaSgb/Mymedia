@@ -1,17 +1,11 @@
+import { fetchRetry } from './http';
 import type { SearchResult } from './types';
 
 const BASE = 'https://api.jikan.moe/v4';
 
-// Jikan is rate-limited (~3/s, 60/min). Retry once on 429 with a short backoff.
 export async function searchJikan(query: string): Promise<SearchResult[]> {
   if (query.trim().length < 3) return []; // MAL requires >=3 chars
-  const url = `${BASE}/anime?q=${encodeURIComponent(query)}&limit=20&sfw`;
-
-  let res = await fetch(url);
-  if (res.status === 429) {
-    await new Promise((r) => setTimeout(r, 1200));
-    res = await fetch(url);
-  }
+  const res = await fetchRetry(`${BASE}/anime?q=${encodeURIComponent(query)}&limit=20&sfw`);
   if (!res.ok) throw new Error(`Jikan ${res.status}`);
 
   const data = await res.json();
@@ -29,4 +23,20 @@ export async function searchJikan(query: string): Promise<SearchResult[]> {
       overview: a.synopsis ?? undefined,
     }),
   }));
+}
+
+// Total watch time for an anime = episodes × per-episode duration (minutes).
+export async function fetchJikanRuntime(malId: string): Promise<number | null> {
+  try {
+    const res = await fetchRetry(`${BASE}/anime/${malId}`);
+    if (!res.ok) return null;
+    const a = (await res.json()).data;
+    const episodes: number = a?.episodes ?? 0;
+    // duration string like "24 min per ep" → parse the leading number.
+    const perEp = parseInt(String(a?.duration ?? '').match(/\d+/)?.[0] ?? '0', 10);
+    if (!episodes || !perEp) return null;
+    return episodes * perEp;
+  } catch {
+    return null;
+  }
 }

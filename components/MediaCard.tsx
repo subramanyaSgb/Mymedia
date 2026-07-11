@@ -25,14 +25,15 @@ export function MediaCard({ item, width = 120 }: { item: Item; width?: number })
           height={width * 1.45}
           fallbackIcon={CATEGORY_ICON[item.category]}
         />
-        <Text variant="caption" numberOfLines={1} style={styles.title}>
-          {item.title}
-        </Text>
-        {item.year ? (
-          <Text variant="micro" color={colors.textMuted}>
-            {item.year}
+        {/* Fixed-height meta block so every card is identical → clean grid alignment. */}
+        <View style={styles.meta}>
+          <Text variant="caption" numberOfLines={1}>
+            {item.title}
           </Text>
-        ) : null}
+          <Text variant="micro" color={colors.textMuted}>
+            {item.year ?? ' '}
+          </Text>
+        </View>
         {showBar ? (
           <View style={styles.track}>
             <View style={[styles.fill, { width: `${pct}%` }]} />
@@ -44,8 +45,8 @@ export function MediaCard({ item, width = 120 }: { item: Item; width?: number })
 }
 
 const styles = StyleSheet.create({
-  pressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
-  title: { marginTop: space.sm },
-  track: { height: 3, borderRadius: radius.pill, backgroundColor: colors.surfaceHi, marginTop: 6, overflow: 'hidden' },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
+  meta: { marginTop: space.sm, height: 38, justifyContent: 'flex-start' },
+  track: { height: 3, borderRadius: radius.pill, backgroundColor: colors.surfaceHi, marginTop: 4, overflow: 'hidden' },
   fill: { height: 3, borderRadius: radius.pill, backgroundColor: colors.accent },
 });

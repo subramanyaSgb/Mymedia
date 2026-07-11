@@ -1,15 +1,17 @@
+import { ensureRuntime } from '@/api/runtime';
 import { searchJikan } from '@/api/jikan';
 import { searchTmdb, tmdbConfigured } from '@/api/tmdb';
 import type { SearchResult } from '@/api/types';
 import { Chip, EmptyState, haptic, Icon, Poster, Screen, Skeleton, Text } from '@/components/ui';
 import { useDebounced } from '@/components/useDebounced';
-import { CATEGORY_ICON } from '@/constants/categories';
+import { CATEGORY_ICON, STATUS_LABEL } from '@/constants/categories';
 import { colors, radius, space } from '@/constants/theme';
-import { addItem } from '@/db/queries';
-import type { Category } from '@/db/schema';
+import { addItem, q } from '@/db/queries';
+import type { Category, Item, Status } from '@/db/schema';
+import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActionSheetIOS, Alert, FlatList, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 const TABS: { key: Category; label: string }[] = [
   { key: 'movie', label: 'Movies' },
@@ -24,8 +26,11 @@ export default function ExploreScreen() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [added, setAdded] = useState<Set<string>>(new Set());
   const debounced = useDebounced(query, 400);
+
+  // Which catalog items are ALREADY in the library — live, so deletes reflect here instantly.
+  const inLib = useLiveQuery(q.sourceIds());
+  const libKeys = new Set(inLib.data.map((r) => `${r.source}-${r.sourceId}`));
 
   useEffect(() => {
     let cancelled = false;
@@ -42,7 +47,13 @@ export default function ExploreScreen() {
           tab === 'anime' ? await searchJikan(debounced) : await searchTmdb(tab as 'movie' | 'series', debounced);
         if (!cancelled) setResults(hits);
       } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? 'Search failed');
+        if (!cancelled) {
+          setError(
+            tab === 'anime'
+              ? 'Anime service is busy. Pull to retry in a moment.'
+              : e?.message ?? 'Search failed'
+          );
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -53,14 +64,33 @@ export default function ExploreScreen() {
     };
   }, [debounced, tab]);
 
-  const add = async (r: SearchResult) => {
+  const doAdd = async (r: SearchResult, status: Status) => {
     try {
-      await addItem({ ...r, status: 'want' });
-      setAdded((s) => new Set(s).add(r.key));
+      const id = await addItem({ ...r, status });
       haptic.success();
+      if (status === 'finished') ensureRuntime({ ...r, id, status } as unknown as Item);
     } catch {
       haptic.warning();
       setError('Could not add. Try again.');
+    }
+  };
+
+  // Long-press → pick a status. Tap → quick-add as "Want".
+  const pickStatus = (r: SearchResult) => {
+    const options: Status[] = ['want', 'watching', 'finished'];
+    const labels = options.map((s) => STATUS_LABEL[s]);
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        { options: [...labels, 'Cancel'], cancelButtonIndex: 3, title: r.title },
+        (i) => {
+          if (i < 3) doAdd(r, options[i]);
+        }
+      );
+    } else {
+      Alert.alert(r.title, 'Add to which list?', [
+        ...options.map((s) => ({ text: STATUS_LABEL[s], onPress: () => doAdd(r, s) })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ]);
     }
   };
 
@@ -101,6 +131,9 @@ export default function ExploreScreen() {
             />
           ))}
         </View>
+        <Text variant="micro" color={colors.textFaint} style={styles.hint}>
+          Tap + to add · long-press for status
+        </Text>
       </View>
 
       {needsToken ? (
@@ -113,7 +146,7 @@ export default function ExploreScreen() {
         </View>
       ) : error ? (
         <View style={styles.pad}>
-          <EmptyState icon="cloud-offline-outline" title="Search failed" subtitle={error} />
+          <EmptyState icon="cloud-offline-outline" title="Search unavailable" subtitle={error} />
         </View>
       ) : loading ? (
         <View style={styles.list}>
@@ -138,7 +171,7 @@ export default function ExploreScreen() {
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => {
-            const isAdded = added.has(item.key);
+            const isAdded = libKeys.has(`${item.source}-${item.sourceId}`);
             return (
               <View style={styles.row}>
                 <Poster
@@ -159,9 +192,10 @@ export default function ExploreScreen() {
                 </View>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={isAdded ? `${item.title} added` : `Add ${item.title}`}
+                  accessibilityLabel={isAdded ? `${item.title} in library` : `Add ${item.title}`}
                   disabled={isAdded}
-                  onPress={() => add(item)}
+                  onPress={() => doAdd(item, 'want')}
+                  onLongPress={() => !isAdded && pickStatus(item)}
                   style={({ pressed }) => [
                     styles.addBtn,
                     isAdded && styles.addBtnDone,
@@ -193,6 +227,7 @@ const styles = StyleSheet.create({
   },
   search: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 12 },
   tabs: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
+  hint: { marginTop: space.sm },
   pad: { paddingHorizontal: space.lg },
   list: { padding: space.lg, gap: space.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },

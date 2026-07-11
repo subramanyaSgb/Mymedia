@@ -1,3 +1,4 @@
+import { ensureRuntime } from '@/api/runtime';
 import { Button, Chip, haptic, Icon, Poster, Text } from '@/components/ui';
 import { CATEGORY_ICON, CATEGORY_LABEL, STATUS_ICON, STATUSES } from '@/constants/categories';
 import { colors, radius, space } from '@/constants/theme';
@@ -10,7 +11,7 @@ import {
   toggleFavorite,
   updateItem,
 } from '@/db/queries';
-import type { Status } from '@/db/schema';
+import type { Item, Status } from '@/db/schema';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -125,6 +126,8 @@ export default function DetailScreen() {
             onPress={() => {
               haptic.light();
               setStatus(item.id, s.key as Status);
+              // Finishing counts toward Hours Logged — fetch runtime if we don't have it.
+              if (s.key === 'finished') ensureRuntime(item as Item);
             }}
           />
         ))}

@@ -1,3 +1,4 @@
+import { fetchRetry } from './http';
 import type { SearchResult } from './types';
 
 // TMDB credential — either a v4 Read Access Token (JWT, starts "eyJ") or a v3 API key (32-char hex).
@@ -21,7 +22,7 @@ export const tmdbConfigured = () => CRED.length > 0;
 async function tmdb(path: string) {
   const sep = path.includes('?') ? '&' : '?';
   const url = isJwt ? `${BASE}${path}` : `${BASE}${path}${sep}api_key=${CRED}`;
-  const res = await fetch(url, {
+  const res = await fetchRetry(url, {
     headers: isJwt
       ? { Authorization: `Bearer ${CRED}`, accept: 'application/json' }
       : { accept: 'application/json' },
@@ -51,4 +52,21 @@ export async function searchTmdb(kind: Kind, query: string): Promise<SearchResul
       metadata: JSON.stringify({ overview: r.overview }),
     };
   });
+}
+
+// Total watch time (minutes). Movie = runtime; series = episodes × avg episode runtime.
+export async function fetchTmdbRuntime(kind: Kind, id: string): Promise<number | null> {
+  try {
+    if (kind === 'movie') {
+      const d = await tmdb(`/movie/${id}`);
+      return d.runtime || null;
+    }
+    const d = await tmdb(`/tv/${id}`);
+    const eps: number = d.number_of_episodes ?? 0;
+    const perEp: number = d.episode_run_time?.[0] ?? 0;
+    if (!eps || !perEp) return null;
+    return eps * perEp;
+  } catch {
+    return null;
+  }
 }
