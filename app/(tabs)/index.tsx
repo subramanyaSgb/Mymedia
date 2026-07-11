@@ -75,7 +75,7 @@ function Section({ title, items, emptyText }: { title: string; items: Item[]; em
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hrow}>
           {items.map((i) => (
-            <MediaCard key={i.id} item={i} />
+            <MediaCard key={i.id} item={i} width={118} />
           ))}
         </ScrollView>
       )}
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
   tagline: { marginTop: 2, marginBottom: space.sm },
   section: { marginTop: space.xl },
   sectionTitle: { marginBottom: space.md },
-  hrow: { gap: space.md },
+  hrow: { gap: space.md, paddingRight: space.lg },
   statsBlock: { marginTop: space.xxl },
   statsHeading: { marginBottom: space.md },
 });

@@ -6,7 +6,7 @@ import { Chip, EmptyState, haptic, Icon, Poster, Screen, Skeleton, Text } from '
 import { useDebounced } from '@/components/useDebounced';
 import { CATEGORY_ICON, STATUS_LABEL } from '@/constants/categories';
 import { colors, radius, space } from '@/constants/theme';
-import { addItem, q } from '@/db/queries';
+import { addItem, deleteBySource, q } from '@/db/queries';
 import type { Category, Item, Status } from '@/db/schema';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useLocalSearchParams } from 'expo-router';
@@ -75,6 +75,12 @@ export default function ExploreScreen() {
     }
   };
 
+  const remove = async (r: SearchResult) => {
+    if (!r.sourceId) return;
+    await deleteBySource(r.source, r.sourceId);
+    haptic.light();
+  };
+
   // Long-press → pick a status. Tap → quick-add as "Want".
   const pickStatus = (r: SearchResult) => {
     const options: Status[] = ['want', 'watching', 'finished'];
@@ -87,10 +93,15 @@ export default function ExploreScreen() {
         }
       );
     } else {
-      Alert.alert(r.title, 'Add to which list?', [
-        ...options.map((s) => ({ text: STATUS_LABEL[s], onPress: () => doAdd(r, s) })),
-        { text: 'Cancel', style: 'cancel' as const },
-      ]);
+      Alert.alert(
+        r.title,
+        'Add to which list?',
+        [
+          ...options.map((s) => ({ text: STATUS_LABEL[s], onPress: () => doAdd(r, s) })),
+          { text: 'Cancel', style: 'cancel' as const },
+        ],
+        { cancelable: true } // tap outside to dismiss without choosing
+      );
     }
   };
 
@@ -132,7 +143,7 @@ export default function ExploreScreen() {
           ))}
         </View>
         <Text variant="micro" color={colors.textFaint} style={styles.hint}>
-          Tap + to add · long-press for status
+          Tap + to add · long-press to pick a list · tap ✓ to remove
         </Text>
       </View>
 
@@ -192,10 +203,11 @@ export default function ExploreScreen() {
                 </View>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={isAdded ? `${item.title} in library` : `Add ${item.title}`}
-                  disabled={isAdded}
-                  onPress={() => doAdd(item, 'want')}
+                  accessibilityLabel={isAdded ? `Remove ${item.title}` : `Add ${item.title}`}
+                  onPress={() => (isAdded ? remove(item) : doAdd(item, 'want'))}
                   onLongPress={() => !isAdded && pickStatus(item)}
+                  delayLongPress={280}
+                  hitSlop={8}
                   style={({ pressed }) => [
                     styles.addBtn,
                     isAdded && styles.addBtnDone,

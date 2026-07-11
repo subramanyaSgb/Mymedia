@@ -56,6 +56,13 @@ export async function deleteItem(id: number): Promise<void> {
   await db.delete(items).where(eq(items.id, id));
 }
 
+// Remove a catalog item from the library by its source + sourceId (used from search).
+export async function deleteBySource(source: string, sourceId: string): Promise<void> {
+  await db
+    .delete(items)
+    .where(and(eq(items.source, source as any), eq(items.sourceId, sourceId)));
+}
+
 // --- Read query builders (pass to useLiveQuery in components) ---
 
 export const q = {

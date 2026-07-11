@@ -23,28 +23,35 @@ function resolve(spec: string[]) {
   return { title: 'List', query: q.all() };
 }
 
+const COLS = 3;
+
 export default function ListScreen() {
   const { spec } = useLocalSearchParams<{ spec: string[] }>();
   const { title, query } = resolve(Array.isArray(spec) ? spec : [spec]);
   const { data } = useLiveQuery(query);
 
-  // Responsive 3-up grid: derive card width from screen width instead of a fixed 104.
+  // Compute an exact card width so COLS cards + gaps fill the row with no ragged edge.
   const { width } = useWindowDimensions();
-  const cols = 3;
   const gap = space.md;
   const pad = space.lg;
-  const cardW = Math.floor((width - pad * 2 - gap * (cols - 1)) / cols);
+  const cardW = (width - pad * 2 - gap * (COLS - 1)) / COLS;
+
+  // Pad the final row so a trailing 1–2 items don't stretch/misalign.
+  const remainder = data.length % COLS;
+  const padded = remainder === 0 ? data : [...data, ...Array(COLS - remainder).fill(null)];
 
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ title }} />
       <FlatList
-        data={data}
-        keyExtractor={(i: Item) => String(i.id)}
-        numColumns={cols}
+        data={padded}
+        keyExtractor={(i: Item | null, idx) => (i ? String(i.id) : `spacer-${idx}`)}
+        numColumns={COLS}
         columnWrapperStyle={{ gap }}
-        contentContainerStyle={{ padding: pad, gap }}
-        renderItem={({ item }) => <MediaCard item={item} width={cardW} />}
+        contentContainerStyle={{ padding: pad, rowGap: space.xl }}
+        renderItem={({ item }) =>
+          item ? <MediaCard item={item} width={cardW} /> : <View style={{ width: cardW }} />
+        }
         ListEmptyComponent={<EmptyState title="Nothing here yet" subtitle="Items you add will show up here." />}
       />
     </View>

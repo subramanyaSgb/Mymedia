@@ -46,7 +46,7 @@ export function MediaCard({ item, width = 120 }: { item: Item; width?: number })
 
 const styles = StyleSheet.create({
   pressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
-  meta: { marginTop: space.sm, height: 38, justifyContent: 'flex-start' },
+  meta: { marginTop: space.sm, height: 34, justifyContent: 'flex-start' },
   track: { height: 3, borderRadius: radius.pill, backgroundColor: colors.surfaceHi, marginTop: 4, overflow: 'hidden' },
   fill: { height: 3, borderRadius: radius.pill, backgroundColor: colors.accent },
 });
