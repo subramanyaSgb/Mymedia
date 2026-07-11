@@ -1,50 +1,65 @@
+import { haptic, Icon, Screen, Text } from '@/components/ui';
 import { CATEGORIES } from '@/constants/categories';
+import { colors, radius, space } from '@/constants/theme';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 export default function AddScreen() {
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.content}>
-        <Text style={styles.h1}>Add to Library</Text>
-        <Text style={styles.sub}>Pick a category</Text>
-        <View style={styles.grid}>
-          {CATEGORIES.map((c) => (
-            <Pressable
-              key={c.key}
-              style={styles.card}
-              onPress={() =>
-                // Catalog categories go to search; songs use the manual form.
-                c.api
-                  ? router.push({ pathname: '/(tabs)/explore', params: { category: c.key } })
-                  : router.push('/manual')
-              }>
-              <Text style={styles.icon}>{c.icon}</Text>
-              <Text style={styles.label}>{c.label}</Text>
-              <Text style={styles.hint}>{c.api ? 'Search catalog' : 'Add manually'}</Text>
-            </Pressable>
-          ))}
-        </View>
+    <Screen>
+      <Text variant="display">Add to Library</Text>
+      <Text variant="caption" muted style={styles.sub}>
+        Pick a category to get started
+      </Text>
+      <View style={styles.grid}>
+        {CATEGORIES.map((c) => (
+          <Pressable
+            key={c.key}
+            accessibilityRole="button"
+            accessibilityLabel={`Add ${c.label}`}
+            onPress={() => {
+              haptic.light();
+              c.api
+                ? router.push({ pathname: '/(tabs)/explore', params: { category: c.key } })
+                : router.push('/manual');
+            }}
+            style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+            <View style={styles.iconWrap}>
+              <Icon name={c.icon} size={26} color={colors.accent} />
+            </View>
+            <Text variant="bodyStrong">{c.label}</Text>
+            <Text variant="micro" color={colors.textMuted}>
+              {c.api ? 'Search catalog' : 'Add manually'}
+            </Text>
+          </Pressable>
+        ))}
       </View>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 16 },
-  h1: { fontSize: 28, fontWeight: '800' },
-  sub: { color: '#6b7280', marginTop: 2, marginBottom: 16 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  sub: { marginTop: 2, marginBottom: space.lg },
+  // grid: two columns via flexBasis math that always sums under 100% with the gap.
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
   card: {
-    width: '47%',
-    backgroundColor: '#f5f3ff',
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
+    flexGrow: 1,
+    flexBasis: '46%',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: space.xl,
+    gap: space.xs,
   },
-  icon: { fontSize: 34 },
-  label: { fontSize: 16, fontWeight: '700', marginTop: 8 },
-  hint: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  pressed: { backgroundColor: colors.surfaceHi, transform: [{ scale: 0.99 }] },
+  iconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    backgroundColor: colors.accentDim,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: space.sm,
+  },
 });

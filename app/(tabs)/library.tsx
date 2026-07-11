@@ -1,10 +1,10 @@
-import { accent } from '@/constants/Colors';
-import { CATEGORIES, STATUSES } from '@/constants/categories';
+import { ListRow, Screen, Text } from '@/components/ui';
+import { CATEGORIES, STATUS_ICON, STATUSES } from '@/constants/categories';
+import { colors, space } from '@/constants/theme';
 import { q } from '@/db/queries';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
-import { Link } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
 
 export default function LibraryScreen() {
   const all = useLiveQuery(q.all());
@@ -15,52 +15,47 @@ export default function LibraryScreen() {
   const favCount = items.filter((i) => i.favorite).length;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.h1}>Library</Text>
+    <Screen>
+      <Text variant="display" style={styles.h1}>
+        Library
+      </Text>
 
-        <Text style={styles.h2}>Categories</Text>
+      <Text variant="micro" color={colors.textMuted} style={styles.section}>
+        CATEGORIES
+      </Text>
+      <View style={styles.group}>
         {CATEGORIES.map((c) => (
-          <Row key={c.key} href={`/list/category/${c.key}`} icon={c.icon} label={c.label} count={countByCat(c.key)} />
+          <ListRow
+            key={c.key}
+            icon={c.icon}
+            label={c.label}
+            count={countByCat(c.key)}
+            onPress={() => router.push(`/list/category/${c.key}`)}
+          />
         ))}
+      </View>
 
-        <Text style={styles.h2}>My Lists</Text>
-        <Row href="/list/favorites" icon="❤️" label="Favorites" count={favCount} />
+      <Text variant="micro" color={colors.textMuted} style={styles.section}>
+        MY LISTS
+      </Text>
+      <View style={styles.group}>
+        <ListRow icon="heart" iconColor={colors.danger} label="Favorites" count={favCount} onPress={() => router.push('/list/favorites')} />
         {STATUSES.map((s) => (
-          <Row key={s.key} href={`/list/status/${s.key}`} icon="📌" label={s.label} count={countByStatus(s.key)} />
+          <ListRow
+            key={s.key}
+            icon={STATUS_ICON[s.key]}
+            label={s.label}
+            count={countByStatus(s.key)}
+            onPress={() => router.push(`/list/status/${s.key}`)}
+          />
         ))}
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function Row({ href, icon, label, count }: { href: string; icon: string; label: string; count: number }) {
-  return (
-    <Link href={href as any} asChild>
-      <Pressable style={styles.row}>
-        <Text style={styles.icon}>{icon}</Text>
-        <Text style={styles.label}>{label}</Text>
-        <Text style={styles.count}>{count}</Text>
-        <Text style={styles.chev}>›</Text>
-      </Pressable>
-    </Link>
+      </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 16, paddingBottom: 32 },
-  h1: { fontSize: 28, fontWeight: '800', marginBottom: 8 },
-  h2: { fontSize: 14, fontWeight: '700', color: '#6b7280', marginTop: 20, marginBottom: 4 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e7eb',
-  },
-  icon: { fontSize: 20, width: 30 },
-  label: { flex: 1, fontSize: 16, fontWeight: '500' },
-  count: { fontSize: 15, color: accent, fontWeight: '700', marginRight: 8 },
-  chev: { fontSize: 22, color: '#c4c4c4' },
+  h1: { marginBottom: space.sm },
+  section: { marginTop: space.xl, marginBottom: space.sm, marginLeft: space.md },
+  group: { gap: space.xs },
 });

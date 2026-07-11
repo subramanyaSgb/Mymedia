@@ -1,16 +1,19 @@
-import { accent } from '@/constants/Colors';
+import { Button, haptic, Icon, Text } from '@/components/ui';
+import { colors, radius, space } from '@/constants/theme';
 import { addItem } from '@/db/queries';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { Stack, router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 // Manual entry — used for Songs (no catalog API).
 export default function ManualAddScreen() {
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
   const [image, setImage] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const pickImage = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
@@ -19,62 +22,113 @@ export default function ManualAddScreen() {
 
   const save = async () => {
     if (!title.trim()) {
-      Alert.alert('Title required');
+      setError('Title is required.');
+      haptic.warning();
       return;
     }
-    await addItem({
-      category: 'song',
-      source: 'manual',
-      title: title.trim(),
-      imageUrl: image,
-      metadata: JSON.stringify({ artist: artist.trim() || undefined }),
-    });
-    router.dismissTo('/(tabs)/library');
+    setSaving(true);
+    setError(null);
+    try {
+      await addItem({
+        category: 'song',
+        source: 'manual',
+        title: title.trim(),
+        imageUrl: image,
+        metadata: JSON.stringify({ artist: artist.trim() || undefined }),
+      });
+      haptic.success();
+      router.dismissTo('/(tabs)/library');
+    } catch {
+      setError('Could not save. Try again.');
+      haptic.warning();
+      setSaving(false);
+    }
   };
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: 'Add Song' }} />
 
-      <Pressable style={styles.imagePicker} onPress={pickImage}>
+      <Pressable style={styles.imagePicker} onPress={pickImage} accessibilityLabel="Add cover image">
         {image ? (
           <Image source={{ uri: image }} style={styles.img} contentFit="cover" />
         ) : (
-          <Text style={styles.imageHint}>＋ Add cover</Text>
+          <View style={styles.imageEmpty}>
+            <Icon name="image-outline" size={26} color={colors.textFaint} />
+            <Text variant="micro" color={colors.textFaint}>
+              Add cover
+            </Text>
+          </View>
         )}
       </Pressable>
 
-      <Text style={styles.label}>Title</Text>
-      <TextInput style={styles.input} value={title} onChangeText={setTitle} placeholder="Song title" />
+      <Field label="Title" value={title} onChange={setTitle} placeholder="Song title" />
+      <Field label="Artist" value={artist} onChange={setArtist} placeholder="Artist (optional)" />
 
-      <Text style={styles.label}>Artist</Text>
-      <TextInput style={styles.input} value={artist} onChangeText={setArtist} placeholder="Artist" />
+      {error ? (
+        <Text variant="caption" color={colors.danger} style={styles.error}>
+          {error}
+        </Text>
+      ) : null}
 
-      <Pressable style={styles.saveBtn} onPress={save}>
-        <Text style={styles.saveText}>Add to Library</Text>
-      </Pressable>
+      <Button label={saving ? 'Saving…' : 'Add to Library'} icon="add" onPress={save} disabled={saving} style={styles.save} />
     </ScrollView>
   );
 }
 
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <View style={styles.field}>
+      <Text variant="micro" color={colors.textMuted}>
+        {label.toUpperCase()}
+      </Text>
+      <TextInput
+        style={styles.input}
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textFaint}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 16 },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  content: { padding: space.lg },
   imagePicker: {
     alignSelf: 'center',
     width: 140,
     height: 140,
-    borderRadius: 12,
-    backgroundColor: '#f3f4f6',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     overflow: 'hidden',
-    marginBottom: 20,
+    marginBottom: space.xl,
   },
   img: { width: '100%', height: '100%' },
-  imageHint: { color: '#9ca3af', fontWeight: '600' },
-  label: { fontSize: 14, fontWeight: '700', color: '#6b7280', marginBottom: 6, marginTop: 12 },
-  input: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, padding: 12, fontSize: 16 },
-  saveBtn: { backgroundColor: accent, borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 28 },
-  saveText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  imageEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.xs },
+  field: { gap: space.sm, marginBottom: space.lg },
+  input: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: space.md,
+    fontSize: 15,
+    color: colors.text,
+  },
+  error: { marginBottom: space.md },
+  save: { marginTop: space.sm },
 });

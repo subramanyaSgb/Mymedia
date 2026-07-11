@@ -1,13 +1,27 @@
-import { useFonts } from 'expo-font';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, router } from 'expo-router';
+import { SpaceGrotesk_700Bold, useFonts } from '@expo-google-fonts/space-grotesk';
+import { DarkTheme, Stack, ThemeProvider, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Alert } from 'react-native';
 import 'react-native-reanimated';
 
 import { checkForUpdate } from '@/api/updates';
-import { useColorScheme } from '@/components/useColorScheme';
+import { colors } from '@/constants/theme';
 import { DatabaseProvider } from '@/db/provider';
+
+// App is dark-only. Nav theme uses our tokens so chrome matches the screens.
+const navTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: colors.bg,
+    card: colors.bg,
+    text: colors.text,
+    border: colors.border,
+    primary: colors.accent,
+  },
+};
 
 // One-shot update check on launch: prompt the user if a newer release exists.
 function useUpdatePrompt() {
@@ -42,41 +56,39 @@ export const unstable_settings = {
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+  const [loaded] = useFonts({ SpaceGrotesk_700Bold });
 
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
+  // Hide the splash once fonts resolve OR after a short timeout — never gate the
+  // whole app on font loading, or a font failure leaves a permanent blank screen.
   useEffect(() => {
-    if (error) throw error;
-  }, [error]);
-
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
+    const t = setTimeout(() => SplashScreen.hideAsync().catch(() => {}), 500);
+    if (loaded) SplashScreen.hideAsync().catch(() => {});
+    return () => clearTimeout(t);
   }, [loaded]);
-
-  if (!loaded) {
-    return null;
-  }
 
   return <RootLayoutNav />;
 }
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
   useUpdatePrompt();
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={navTheme}>
+      <StatusBar style="light" />
       <DatabaseProvider>
-        <Stack>
+        <Stack
+          screenOptions={{
+            headerStyle: { backgroundColor: colors.bg },
+            headerTintColor: colors.text,
+            headerShadowVisible: false,
+            contentStyle: { backgroundColor: colors.bg },
+            headerBackTitle: 'Back',
+          }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="item/[id]" options={{ headerBackTitle: 'Back' }} />
-          <Stack.Screen name="list/[...spec]" options={{ headerBackTitle: 'Back' }} />
-          <Stack.Screen name="manual" options={{ presentation: 'modal', headerBackTitle: 'Back' }} />
-          <Stack.Screen name="about" options={{ headerBackTitle: 'Back' }} />
+          <Stack.Screen name="item/[id]" />
+          <Stack.Screen name="list/[...spec]" />
+          <Stack.Screen name="manual" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="about" />
         </Stack>
       </DatabaseProvider>
     </ThemeProvider>

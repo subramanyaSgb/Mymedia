@@ -1,8 +1,9 @@
-import { accent } from '@/constants/Colors';
 import { checkForUpdate, currentVersion, RELEASES_PAGE, type UpdateInfo } from '@/api/updates';
+import { Button, Card, haptic, Icon, Text } from '@/components/ui';
+import { colors, radius, space } from '@/constants/theme';
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 export default function AboutScreen() {
   const [info, setInfo] = useState<UpdateInfo | null>(null);
@@ -15,7 +16,7 @@ export default function AboutScreen() {
     try {
       setInfo(await checkForUpdate());
     } catch (e: any) {
-      setError(e.message ?? 'Could not check for updates');
+      setError(e?.message ?? 'Could not check for updates');
     } finally {
       setChecking(false);
     }
@@ -25,66 +26,91 @@ export default function AboutScreen() {
     check();
   }, []);
 
-  const download = () => Linking.openURL(info?.apkUrl ?? RELEASES_PAGE);
+  const download = () => {
+    haptic.light();
+    Linking.openURL(info?.apkUrl ?? RELEASES_PAGE);
+  };
 
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: 'About' }} />
 
-      <Text style={styles.appName}>MyMedia</Text>
-      <Text style={styles.tagline}>All your favorites. Organized.</Text>
-      <Text style={styles.version}>Version {currentVersion}</Text>
+      <View style={styles.logo}>
+        <Icon name="film" size={30} color={colors.accent} />
+      </View>
+      <Text variant="display" center>
+        MyMedia
+      </Text>
+      <Text variant="caption" muted center style={styles.tagline}>
+        Everything you watch, in one place.
+      </Text>
+      <Text variant="caption" color={colors.textFaint} center>
+        Version {currentVersion}
+      </Text>
 
-      <View style={styles.card}>
+      <Card style={styles.card}>
         {checking ? (
           <View style={styles.rowCenter}>
-            <ActivityIndicator />
-            <Text style={styles.checking}>Checking for updates…</Text>
+            <ActivityIndicator color={colors.accent} />
+            <Text variant="caption" muted>
+              Checking for updates…
+            </Text>
           </View>
         ) : error ? (
-          <Text style={styles.error}>{error}</Text>
+          <View style={styles.rowCenter}>
+            <Icon name="cloud-offline-outline" size={18} color={colors.danger} />
+            <Text variant="caption" color={colors.danger} center>
+              {error}
+            </Text>
+          </View>
         ) : info?.available ? (
-          <>
-            <Text style={styles.updateTitle}>Update available: v{info.latest}</Text>
-            <Pressable style={styles.dlBtn} onPress={download}>
-              <Text style={styles.dlText}>Download update</Text>
-            </Pressable>
-          </>
+          <View style={styles.updateBlock}>
+            <View style={styles.rowCenter}>
+              <Icon name="arrow-up-circle" size={18} color={colors.accent} />
+              <Text variant="bodyStrong">Update available: v{info.latest}</Text>
+            </View>
+            <Button label="Download update" icon="download-outline" onPress={download} style={styles.dlBtn} />
+          </View>
         ) : (
-          <Text style={styles.upToDate}>You're on the latest version.</Text>
+          <View style={styles.rowCenter}>
+            <Icon name="checkmark-circle" size={18} color={colors.success} />
+            <Text variant="caption" color={colors.success}>
+              You're on the latest version.
+            </Text>
+          </View>
         )}
-      </View>
+      </Card>
 
-      <Pressable onPress={check}>
-        <Text style={styles.recheck}>Check again</Text>
+      <Pressable onPress={check} style={styles.linkBtn} accessibilityRole="button">
+        <Text variant="caption" color={colors.accent}>
+          Check again
+        </Text>
       </Pressable>
-      <Pressable onPress={() => Linking.openURL(RELEASES_PAGE)}>
-        <Text style={styles.link}>All releases on GitHub</Text>
+      <Pressable onPress={() => Linking.openURL(RELEASES_PAGE)} style={styles.linkBtn} accessibilityRole="button">
+        <Text variant="caption" color={colors.textMuted}>
+          All releases on GitHub
+        </Text>
       </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff', padding: 24, alignItems: 'center' },
-  appName: { fontSize: 30, fontWeight: '800', marginTop: 20 },
-  tagline: { color: '#6b7280', marginTop: 4 },
-  version: { color: '#9ca3af', marginTop: 8 },
-  card: {
-    marginTop: 28,
-    width: '100%',
-    backgroundColor: '#f5f3ff',
-    borderRadius: 16,
-    padding: 20,
+  screen: { flex: 1, backgroundColor: colors.bg, padding: space.xl, alignItems: 'center' },
+  logo: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.lg,
+    backgroundColor: colors.accentDim,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: space.xl,
+    marginBottom: space.md,
   },
-  rowCenter: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  checking: { color: '#6b7280' },
-  error: { color: '#dc2626', textAlign: 'center' },
-  updateTitle: { fontSize: 16, fontWeight: '700', marginBottom: 14 },
-  dlBtn: { backgroundColor: accent, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 28 },
-  dlText: { color: '#fff', fontWeight: '700' },
-  upToDate: { color: '#16a34a', fontWeight: '600' },
-  recheck: { color: accent, marginTop: 20, fontWeight: '600' },
-  link: { color: '#6b7280', marginTop: 16, textDecorationLine: 'underline' },
+  tagline: { marginTop: space.xs, marginBottom: space.sm },
+  card: { marginTop: space.xl, width: '100%' },
+  rowCenter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm },
+  updateBlock: { alignItems: 'center', gap: space.md },
+  dlBtn: { alignSelf: 'stretch' },
+  linkBtn: { paddingVertical: space.md, minHeight: 44, justifyContent: 'center' },
 });

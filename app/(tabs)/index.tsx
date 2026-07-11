@@ -1,55 +1,79 @@
 import { MediaCard } from '@/components/MediaCard';
-import { accent } from '@/constants/Colors';
+import { EmptyState, Screen, Skeleton, Stat, StatRow, Text } from '@/components/ui';
+import { colors, space } from '@/constants/theme';
 import { getStats, q, type Item, type Stats } from '@/db/queries';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 export default function HomeScreen() {
   const watching = useLiveQuery(q.continueWatching());
-  const recent = useLiveQuery(q.recentlyAdded(10));
+  const recent = useLiveQuery(q.recentlyAdded(12));
   const [stats, setStats] = useState<Stats | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Stats are an aggregate query (not reactive) — refresh whenever Home regains focus.
-  useFocusEffect(
-    useCallback(() => {
-      getStats().then(setStats);
-    }, [])
-  );
+  const loadStats = useCallback(() => getStats().then(setStats), []);
+  useFocusEffect(useCallback(() => void loadStats(), [loadStats]));
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadStats();
+    setRefreshing(false);
+  }, [loadStats]);
+
+  const empty = recent.data.length === 0;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.hi}>MyMedia</Text>
-        <Text style={styles.tagline}>All your favorites. Organized.</Text>
+    <Screen
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+      }>
+      <Text variant="display">MyMedia</Text>
+      <Text variant="caption" muted style={styles.tagline}>
+        Everything you watch, in one place.
+      </Text>
 
-        <Section title="Continue Watching" items={watching.data} empty="Nothing in progress yet." />
-        <Section title="Recently Added" items={recent.data} empty="Add your first title from Explore or +." />
+      {empty ? (
+        <EmptyState
+          icon="add-circle-outline"
+          title="Your library is empty"
+          subtitle="Search a title in Explore, or tap + to add one manually."
+        />
+      ) : (
+        <>
+          <Section title="Continue Watching" items={watching.data} emptyText="Nothing in progress." />
+          <Section title="Recently Added" items={recent.data} />
+        </>
+      )}
 
-        <View style={styles.statsCard}>
-          <Text style={styles.statsHeading}>Your Statistics</Text>
-          <View style={styles.statsRow}>
-            <Stat label="Days Tracked" value={stats?.daysTracked ?? 0} />
-            <Stat label="Items Watched" value={stats?.itemsWatched ?? 0} />
-            <Stat label="Hours Logged" value={stats?.hoursLogged ?? 0} />
-            <Stat label="Total" value={stats?.totalItems ?? 0} />
-          </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      <View style={styles.statsBlock}>
+        <Text variant="h2" style={styles.statsHeading}>
+          Your Statistics
+        </Text>
+        <StatRow>
+          <Stat label="Days" value={stats?.daysTracked ?? 0} />
+          <Stat label="Watched" value={stats?.itemsWatched ?? 0} />
+          <Stat label="Hours" value={stats?.hoursLogged ?? 0} />
+          <Stat label="Total" value={stats?.totalItems ?? 0} />
+        </StatRow>
+      </View>
+    </Screen>
   );
 }
 
-function Section({ title, items, empty }: { title: string; items: Item[]; empty: string }) {
+function Section({ title, items, emptyText }: { title: string; items: Item[]; emptyText?: string }) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {items.length === 0 ? (
-        <Text style={styles.emptyText}>{empty}</Text>
+      <Text variant="h2" style={styles.sectionTitle}>
+        {title}
+      </Text>
+      {items.length === 0 && emptyText ? (
+        <Text variant="caption" color={colors.textFaint}>
+          {emptyText}
+        </Text>
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hrow}>
           {items.map((i) => (
             <MediaCard key={i.id} item={i} />
           ))}
@@ -59,27 +83,11 @@ function Section({ title, items, empty }: { title: string; items: Item[]; empty:
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#fff' },
-  content: { padding: 16, paddingBottom: 32 },
-  hi: { fontSize: 28, fontWeight: '800' },
-  tagline: { color: '#6b7280', marginTop: 2, marginBottom: 8 },
-  section: { marginTop: 20 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 10 },
-  emptyText: { color: '#9ca3af', fontStyle: 'italic' },
-  statsCard: { marginTop: 24, backgroundColor: '#f5f3ff', borderRadius: 16, padding: 16 },
-  statsHeading: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  stat: { alignItems: 'center', flex: 1 },
-  statValue: { fontSize: 20, fontWeight: '800', color: accent },
-  statLabel: { fontSize: 11, color: '#6b7280', marginTop: 2, textAlign: 'center' },
+  tagline: { marginTop: 2, marginBottom: space.sm },
+  section: { marginTop: space.xl },
+  sectionTitle: { marginBottom: space.md },
+  hrow: { gap: space.md },
+  statsBlock: { marginTop: space.xxl },
+  statsHeading: { marginBottom: space.md },
 });
