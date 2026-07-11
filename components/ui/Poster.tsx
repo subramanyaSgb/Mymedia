@@ -35,7 +35,12 @@ export function Poster({
 }
 
 const styles = StyleSheet.create({
-  wrap: { backgroundColor: colors.posterBg, overflow: 'hidden' },
+  wrap: {
+    backgroundColor: colors.posterBg,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.08)', // crisp edge on pure black
+  },
   img: { width: '100%', height: '100%' },
   placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, padding: 6 },
   letter: { textAlign: 'center' },

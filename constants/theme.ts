@@ -45,13 +45,15 @@ export const radius = {
 
 // Type scale — weights carry hierarchy (per design guidance: control with weight, not just size).
 export const type = {
-  display: { fontSize: 30, fontWeight: '800', letterSpacing: -0.5 },
-  h1: { fontSize: 24, fontWeight: '800', letterSpacing: -0.4 },
-  h2: { fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
+  display: { fontSize: 28, fontWeight: '800', letterSpacing: -0.6 },
+  h1: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4 },
+  h2: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
   body: { fontSize: 15, fontWeight: '500' },
   bodyStrong: { fontSize: 15, fontWeight: '700' },
   caption: { fontSize: 13, fontWeight: '500' },
-  micro: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3 },
+  micro: { fontSize: 11, fontWeight: '600', letterSpacing: 0.4 },
+  // Uppercase section kicker — the quiet label above content groups.
+  kicker: { fontSize: 11, fontWeight: '700', letterSpacing: 1.4 },
 } as const;
 
 // Display font (loaded in _layout). Applied to headings via the Text component.

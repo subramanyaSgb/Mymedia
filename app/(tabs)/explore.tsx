@@ -111,6 +111,9 @@ export default function ExploreScreen() {
   return (
     <Screen scroll={false} padded={false}>
       <View style={styles.header}>
+        <Text variant="caption" color={colors.textFaint}>
+          Movies · Series · Anime
+        </Text>
         <Text variant="display" style={styles.title}>
           Explore
         </Text>
@@ -196,10 +199,19 @@ export default function ExploreScreen() {
                   <Text variant="bodyStrong" numberOfLines={2}>
                     {item.title}
                   </Text>
-                  <Text variant="micro" color={colors.textMuted} style={{ marginTop: 2 }}>
-                    {item.year ?? '—'}
-                    {item.catalogRating ? `  ·  ★ ${item.catalogRating.toFixed(1)}` : ''}
-                  </Text>
+                  <View style={styles.metaLine}>
+                    <Text variant="micro" color={colors.textMuted}>
+                      {item.year ?? '—'}
+                    </Text>
+                    {item.catalogRating ? (
+                      <>
+                        <Icon name="star" size={11} color={colors.accent} />
+                        <Text variant="micro" color={colors.textMuted}>
+                          {item.catalogRating.toFixed(1)}
+                        </Text>
+                      </>
+                    ) : null}
+                  </View>
                 </View>
                 <Pressable
                   accessibilityRole="button"
@@ -244,6 +256,7 @@ const styles = StyleSheet.create({
   list: { padding: space.lg, gap: space.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   rowInfo: { flex: 1 },
+  metaLine: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
   addBtn: {
     width: 44,
     height: 44,

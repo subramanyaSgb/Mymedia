@@ -1,17 +1,27 @@
+import { ContinueCard } from '@/components/ContinueCard';
 import { MediaCard } from '@/components/MediaCard';
-import { EmptyState, Screen, Skeleton, Stat, StatRow, Text } from '@/components/ui';
+import { EmptyState, Screen, SectionHeader, Stat, StatRow, Text } from '@/components/ui';
 import { colors, space } from '@/constants/theme';
-import { getStats, q, type Item, type Stats } from '@/db/queries';
+import { getStats, q, type Stats } from '@/db/queries';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 5) return 'Good night';
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
 
 export default function HomeScreen() {
   const watching = useLiveQuery(q.continueWatching());
   const recent = useLiveQuery(q.recentlyAdded(12));
   const [stats, setStats] = useState<Stats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const { width } = useWindowDimensions();
 
   const loadStats = useCallback(() => getStats().then(setStats), []);
   useFocusEffect(useCallback(() => void loadStats(), [loadStats]));
@@ -23,71 +33,59 @@ export default function HomeScreen() {
   }, [loadStats]);
 
   const empty = recent.data.length === 0;
+  const featuredW = Math.min(width - space.lg * 2 - 36, 320);
 
   return (
     <Screen
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
       }>
-      <Text variant="display">MyMedia</Text>
-      <Text variant="caption" muted style={styles.tagline}>
-        Everything you watch, in one place.
+      <Text variant="caption" color={colors.textFaint}>
+        {greeting()}
       </Text>
+      <Text variant="display">Your library</Text>
 
       {empty ? (
         <EmptyState
           icon="add-circle-outline"
-          title="Your library is empty"
-          subtitle="Search a title in Explore, or tap + to add one manually."
+          title="Nothing here yet"
+          subtitle="Search a title in Explore, or use + to add one manually."
         />
       ) : (
         <>
-          <Section title="Continue Watching" items={watching.data} emptyText="Nothing in progress." />
-          <Section title="Recently Added" items={recent.data} />
+          {watching.data.length > 0 ? (
+            <>
+              <SectionHeader title="Continue watching" />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hrow}>
+                {watching.data.map((i) => (
+                  <ContinueCard key={i.id} item={i} width={featuredW} />
+                ))}
+              </ScrollView>
+            </>
+          ) : null}
+
+          <SectionHeader title="Recently added" />
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hrow}>
+            {recent.data.map((i) => (
+              <MediaCard key={i.id} item={i} width={110} />
+            ))}
+          </ScrollView>
         </>
       )}
 
-      <View style={styles.statsBlock}>
-        <Text variant="h2" style={styles.statsHeading}>
-          Your Statistics
-        </Text>
-        <StatRow>
-          <Stat label="Days" value={stats?.daysTracked ?? 0} />
-          <Stat label="Watched" value={stats?.itemsWatched ?? 0} />
-          <Stat label="Hours" value={stats?.hoursLogged ?? 0} />
-          <Stat label="Total" value={stats?.totalItems ?? 0} />
-        </StatRow>
-      </View>
+      <SectionHeader title="Statistics" />
+      <StatRow>
+        <Stat label="Days" value={stats?.daysTracked ?? 0} />
+        <Stat label="Watched" value={stats?.itemsWatched ?? 0} />
+        <Stat label="Hours" value={stats?.hoursLogged ?? 0} />
+        <Stat label="Total" value={stats?.totalItems ?? 0} />
+      </StatRow>
+      <View style={styles.footer} />
     </Screen>
   );
 }
 
-function Section({ title, items, emptyText }: { title: string; items: Item[]; emptyText?: string }) {
-  return (
-    <View style={styles.section}>
-      <Text variant="h2" style={styles.sectionTitle}>
-        {title}
-      </Text>
-      {items.length === 0 && emptyText ? (
-        <Text variant="caption" color={colors.textFaint}>
-          {emptyText}
-        </Text>
-      ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hrow}>
-          {items.map((i) => (
-            <MediaCard key={i.id} item={i} width={118} />
-          ))}
-        </ScrollView>
-      )}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  tagline: { marginTop: 2, marginBottom: space.sm },
-  section: { marginTop: space.xl },
-  sectionTitle: { marginBottom: space.md },
   hrow: { gap: space.md, paddingRight: space.lg },
-  statsBlock: { marginTop: space.xxl },
-  statsHeading: { marginBottom: space.md },
+  footer: { height: space.xl },
 });

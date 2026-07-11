@@ -7,6 +7,7 @@ export { Icon, type IconName } from './Icon';
 export { ListRow } from './ListRow';
 export { Poster } from './Poster';
 export { Screen } from './Screen';
+export { SectionHeader } from './SectionHeader';
 export { Skeleton } from './Skeleton';
 export { Stat, StatRow } from './StatCard';
 export { Text } from './Text';

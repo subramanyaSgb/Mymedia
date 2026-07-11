@@ -1,5 +1,5 @@
 import { ensureRuntime } from '@/api/runtime';
-import { Button, Chip, haptic, Icon, Poster, Text } from '@/components/ui';
+import { Button, Chip, haptic, Icon, SectionHeader, Text } from '@/components/ui';
 import { CATEGORY_ICON, CATEGORY_LABEL, STATUS_ICON, STATUSES } from '@/constants/categories';
 import { colors, radius, space } from '@/constants/theme';
 import {
@@ -13,18 +13,29 @@ import {
 } from '@/db/queries';
 import type { Item, Status } from '@/db/schema';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
 export default function DetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data, updatedAt } = useLiveQuery(q.byId(Number(id)));
   const item = data[0];
+  const { width } = useWindowDimensions();
 
-  // Distinguish "still loading" from "genuinely missing" — fixes the "Not found" flash.
   if (!item) {
-    const loaded = updatedAt != null; // live query has resolved at least once
+    const loaded = updatedAt != null;
     return (
       <View style={styles.center}>
         <Stack.Screen options={{ title: '' }} />
@@ -45,6 +56,7 @@ export default function DetailScreen() {
   const meta = parseMetadata(item.metadata);
   const progress = parseProgress(item.progress);
   const isEpisodic = item.category === 'series' || item.category === 'anime';
+  const heroH = Math.round(width * 1.1);
 
   const confirmDelete = () =>
     Alert.alert('Delete', `Remove "${item.title}" from your library?`, [
@@ -61,125 +73,165 @@ export default function DetailScreen() {
     ]);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Stack.Screen options={{ title: CATEGORY_LABEL[item.category] }} />
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content} bounces={false}>
+      <Stack.Screen
+        options={{
+          title: '',
+          headerTransparent: true,
+          headerTintColor: colors.text,
+        }}
+      />
 
-      <View style={styles.header}>
-        <Poster
-          uri={item.imageUrl}
-          title={item.title}
-          width={112}
-          height={164}
-          fallbackIcon={CATEGORY_ICON[item.category]}
+      {/* Full-bleed hero: poster art fading into the black background. */}
+      <View style={[styles.hero, { height: heroH }]}>
+        {item.imageUrl ? (
+          <Image source={{ uri: item.imageUrl }} style={styles.heroImg} contentFit="cover" transition={250} />
+        ) : (
+          <View style={styles.heroFallback}>
+            <Icon name={CATEGORY_ICON[item.category]} size={64} color={colors.textFaint} />
+          </View>
+        )}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.35)', 'transparent', 'rgba(0,0,0,0.55)', colors.bg]}
+          locations={[0, 0.35, 0.75, 1]}
+          style={StyleSheet.absoluteFill}
         />
-        <View style={styles.headerInfo}>
-          <Text variant="h1">{item.title}</Text>
-          {item.year ? (
-            <Text variant="caption" muted style={styles.metaLine}>
-              {item.year}
-            </Text>
-          ) : null}
-          {meta.artist ? (
-            <Text variant="caption" muted style={styles.metaLine}>
-              {meta.artist}
-            </Text>
-          ) : null}
-          {item.catalogRating ? (
-            <View style={styles.ratingRow}>
-              <Icon name="star" size={14} color={colors.accent} />
+        <View style={styles.heroText}>
+          <Text variant="kicker" color={colors.textMuted}>
+            {CATEGORY_LABEL[item.category].toUpperCase()}
+            {item.year ? `  ·  ${item.year}` : ''}
+          </Text>
+          <Text variant="display" style={styles.title}>
+            {item.title}
+          </Text>
+          <View style={styles.metaRow}>
+            {item.catalogRating ? (
+              <View style={styles.metaChip}>
+                <Icon name="star" size={13} color={colors.accent} />
+                <Text variant="caption" muted>
+                  {item.catalogRating.toFixed(1)}
+                </Text>
+              </View>
+            ) : null}
+            {meta.artist ? (
               <Text variant="caption" muted>
-                {item.catalogRating.toFixed(1)}
+                {meta.artist}
               </Text>
-            </View>
-          ) : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={item.favorite ? 'Remove from favorites' : 'Add to favorites'}
-            accessibilityState={{ selected: item.favorite }}
-            onPress={() => {
-              haptic.light();
-              toggleFavorite(item.id, !item.favorite);
-            }}
-            style={styles.favBtn}>
-            <Icon name={item.favorite ? 'heart' : 'heart-outline'} size={22} color={item.favorite ? colors.danger : colors.textMuted} />
-            <Text variant="caption" color={item.favorite ? colors.danger : colors.textMuted}>
-              {item.favorite ? 'Favorited' : 'Favorite'}
-            </Text>
-          </Pressable>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={item.favorite ? 'Remove from favorites' : 'Add to favorites'}
+              accessibilityState={{ selected: item.favorite }}
+              hitSlop={10}
+              onPress={() => {
+                haptic.light();
+                toggleFavorite(item.id, !item.favorite);
+              }}>
+              <Icon
+                name={item.favorite ? 'heart' : 'heart-outline'}
+                size={20}
+                color={item.favorite ? colors.danger : colors.textMuted}
+              />
+            </Pressable>
+          </View>
         </View>
       </View>
 
-      {meta.overview ? (
-        <Text variant="body" muted style={styles.overview}>
-          {meta.overview}
-        </Text>
-      ) : null}
+      <View style={styles.body}>
+        {/* Status — one connected segmented control, not floating chips. */}
+        <View style={styles.segment}>
+          {STATUSES.map((s, i) => {
+            const active = item.status === s.key;
+            return (
+              <Pressable
+                key={s.key}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                onPress={() => {
+                  haptic.light();
+                  setStatus(item.id, s.key as Status);
+                  if (s.key === 'finished') ensureRuntime(item as Item);
+                }}
+                style={[
+                  styles.segmentBtn,
+                  active && styles.segmentActive,
+                  i > 0 && styles.segmentDivider,
+                ]}>
+                <Icon
+                  name={STATUS_ICON[s.key]}
+                  size={15}
+                  color={active ? colors.onAccent : colors.textFaint}
+                />
+                <Text variant="micro" color={active ? colors.onAccent : colors.textMuted}>
+                  {s.key === 'want' ? 'WANT' : s.key === 'watching' ? 'WATCHING' : 'FINISHED'}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
-      <Label text="Status" />
-      <View style={styles.chipRow}>
-        {STATUSES.map((s) => (
-          <Chip
-            key={s.key}
-            label={s.label}
-            active={item.status === s.key}
-            activeIcon={STATUS_ICON[s.key]}
-            onPress={() => {
-              haptic.light();
-              setStatus(item.id, s.key as Status);
-              // Finishing counts toward Hours Logged — fetch runtime if we don't have it.
-              if (s.key === 'finished') ensureRuntime(item as Item);
-            }}
-          />
-        ))}
-      </View>
+        {meta.overview ? (
+          <>
+            <SectionHeader title="Overview" />
+            <Text variant="body" muted style={styles.overview}>
+              {meta.overview}
+            </Text>
+          </>
+        ) : null}
 
-      {isEpisodic ? (
-        <ProgressEditor
-          season={progress.season ?? 0}
-          episode={progress.episode ?? 0}
-          onChange={(season, episode) =>
-            updateItem(item.id, { progress: JSON.stringify({ ...progress, season, episode }) })
-          }
+        {isEpisodic ? (
+          <>
+            <SectionHeader title="Progress" />
+            <ProgressEditor
+              season={progress.season ?? 0}
+              episode={progress.episode ?? 0}
+              onChange={(season, episode) =>
+                updateItem(item.id, { progress: JSON.stringify({ ...progress, season, episode }) })
+              }
+            />
+          </>
+        ) : null}
+
+        <SectionHeader title="Your rating" />
+        <View style={styles.starRow}>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <Pressable
+              key={n}
+              accessibilityRole="button"
+              accessibilityLabel={`Rate ${n} of 5`}
+              hitSlop={6}
+              onPress={() => {
+                haptic.light();
+                updateItem(item.id, { userRating: n });
+              }}>
+              <Icon
+                name={(item.userRating ?? 0) >= n ? 'star' : 'star-outline'}
+                size={26}
+                color={(item.userRating ?? 0) >= n ? colors.accent : colors.textFaint}
+              />
+            </Pressable>
+          ))}
+        </View>
+
+        <SectionHeader title="Notes" />
+        <TextInput
+          style={styles.notes}
+          multiline
+          placeholder="Add a note…"
+          placeholderTextColor={colors.textFaint}
+          defaultValue={item.notes ?? ''}
+          onEndEditing={(e) => updateItem(item.id, { notes: e.nativeEvent.text })}
         />
-      ) : null}
 
-      <Label text="Your Rating" />
-      <View style={styles.starRow}>
-        {[1, 2, 3, 4, 5].map((n) => (
-          <Pressable
-            key={n}
-            accessibilityRole="button"
-            accessibilityLabel={`Rate ${n} of 5`}
-            hitSlop={6}
-            onPress={() => {
-              haptic.light();
-              updateItem(item.id, { userRating: n });
-            }}>
-            <Icon name={(item.userRating ?? 0) >= n ? 'star' : 'star-outline'} size={30} color={colors.accent} />
-          </Pressable>
-        ))}
+        <Button
+          label="Remove from library"
+          variant="danger"
+          icon="trash-outline"
+          onPress={confirmDelete}
+          style={styles.delete}
+        />
       </View>
-
-      <Label text="Notes" />
-      <TextInput
-        style={styles.notes}
-        multiline
-        placeholder="Add a note…"
-        placeholderTextColor={colors.textFaint}
-        defaultValue={item.notes ?? ''}
-        onEndEditing={(e) => updateItem(item.id, { notes: e.nativeEvent.text })}
-      />
-
-      <Button label="Delete from library" variant="danger" icon="trash-outline" onPress={confirmDelete} style={styles.delete} />
     </ScrollView>
-  );
-}
-
-function Label({ text }: { text: string }) {
-  return (
-    <Text variant="micro" color={colors.textMuted} style={styles.label}>
-      {text.toUpperCase()}
-    </Text>
   );
 }
 
@@ -201,12 +253,9 @@ function ProgressEditor({
     onChange(ns, ne);
   };
   return (
-    <View>
-      <Label text="Progress" />
-      <View style={styles.progRow}>
-        <Stepper label="Season" value={s} onDec={() => commit(Math.max(0, s - 1), e)} onInc={() => commit(s + 1, e)} />
-        <Stepper label="Episode" value={e} onDec={() => commit(s, Math.max(0, e - 1))} onInc={() => commit(s, e + 1)} />
-      </View>
+    <View style={styles.progRow}>
+      <Stepper label="Season" value={s} onDec={() => commit(Math.max(0, s - 1), e)} onInc={() => commit(s + 1, e)} />
+      <Stepper label="Episode" value={e} onDec={() => commit(s, Math.max(0, e - 1))} onInc={() => commit(s, e + 1)} />
     </View>
   );
 }
@@ -214,18 +263,18 @@ function ProgressEditor({
 function Stepper({ label, value, onDec, onInc }: { label: string; value: number; onDec: () => void; onInc: () => void }) {
   return (
     <View style={styles.stepper}>
-      <Text variant="micro" color={colors.textMuted}>
+      <Text variant="micro" color={colors.textFaint}>
         {label.toUpperCase()}
       </Text>
       <View style={styles.stepperControls}>
         <Pressable onPress={onDec} accessibilityLabel={`Decrease ${label}`} style={styles.stepBtn}>
-          <Icon name="remove" size={20} color={colors.accent} />
+          <Icon name="remove" size={18} color={colors.text} />
         </Pressable>
         <Text variant="h2" style={styles.stepperValue}>
           {value}
         </Text>
         <Pressable onPress={onInc} accessibilityLabel={`Increase ${label}`} style={styles.stepBtn}>
-          <Icon name="add" size={20} color={colors.accent} />
+          <Icon name="add" size={18} color={colors.text} />
         </Pressable>
       </View>
     </View>
@@ -234,20 +283,53 @@ function Stepper({ label, value, onDec, onInc }: { label: string; value: number;
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: space.lg, paddingBottom: space.xxl },
+  content: { paddingBottom: space.xxl },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
-  header: { flexDirection: 'row', gap: space.lg },
-  headerInfo: { flex: 1 },
-  metaLine: { marginTop: 2 },
-  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: space.xs },
-  favBtn: { flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: space.md },
-  overview: { marginTop: space.lg, lineHeight: 21 },
-  label: { marginTop: space.xl, marginBottom: space.sm },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  starRow: { flexDirection: 'row', gap: space.sm },
+
+  hero: { width: '100%' },
+  heroImg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  heroFallback: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroText: { position: 'absolute', left: space.lg, right: space.lg, bottom: space.lg, gap: 6 },
+  title: { lineHeight: 32 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginTop: 2 },
+  metaChip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+
+  body: { paddingHorizontal: space.lg },
+
+  segment: {
+    flexDirection: 'row',
+    marginTop: space.lg,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  segmentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 13,
+    backgroundColor: colors.surface,
+  },
+  segmentActive: { backgroundColor: colors.accent },
+  segmentDivider: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border },
+
+  overview: { lineHeight: 22 },
+  starRow: { flexDirection: 'row', gap: space.md },
   notes: {
     backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     borderRadius: radius.md,
     padding: space.md,
@@ -260,9 +342,9 @@ const styles = StyleSheet.create({
   stepper: { flex: 1, gap: space.sm },
   stepperControls: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   stepBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
+    width: 42,
+    height: 42,
+    borderRadius: radius.sm,
     backgroundColor: colors.surfaceHi,
     alignItems: 'center',
     justifyContent: 'center',
