@@ -1,22 +1,30 @@
 import type { SearchResult } from './types';
 
-// TMDB read access token — supply via app.json extra.tmdbToken or EXPO_PUBLIC_TMDB_TOKEN.
-// ponytail: token in a mobile app is extractable; acceptable for a personal local app. Don't commit a real one.
+// TMDB credential — either a v4 Read Access Token (JWT, starts "eyJ") or a v3 API key (32-char hex).
+// Supply via EXPO_PUBLIC_TMDB_TOKEN / app.json extra.tmdbToken.
+// ponytail: credential in a mobile app is extractable; acceptable for a personal local app.
 import Constants from 'expo-constants';
 
-const TOKEN =
+const CRED =
   process.env.EXPO_PUBLIC_TMDB_TOKEN ||
   (Constants.expoConfig?.extra?.tmdbToken as string | undefined) ||
   '';
 
+// A JWT read-token uses Bearer auth; a plain API key goes in the ?api_key= query param.
+const isJwt = CRED.startsWith('eyJ');
+
 const BASE = 'https://api.themoviedb.org/3';
 const IMG = 'https://image.tmdb.org/t/p/w500';
 
-export const tmdbConfigured = () => TOKEN.length > 0;
+export const tmdbConfigured = () => CRED.length > 0;
 
 async function tmdb(path: string) {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { Authorization: `Bearer ${TOKEN}`, accept: 'application/json' },
+  const sep = path.includes('?') ? '&' : '?';
+  const url = isJwt ? `${BASE}${path}` : `${BASE}${path}${sep}api_key=${CRED}`;
+  const res = await fetch(url, {
+    headers: isJwt
+      ? { Authorization: `Bearer ${CRED}`, accept: 'application/json' }
+      : { accept: 'application/json' },
   });
   if (!res.ok) throw new Error(`TMDB ${res.status}`);
   return res.json();
@@ -25,7 +33,7 @@ async function tmdb(path: string) {
 type Kind = 'movie' | 'series';
 
 export async function searchTmdb(kind: Kind, query: string): Promise<SearchResult[]> {
-  if (!TOKEN) throw new Error('TMDB token not set');
+  if (!CRED) throw new Error('TMDB credential not set');
   const endpoint = kind === 'movie' ? 'movie' : 'tv';
   const data = await tmdb(`/search/${endpoint}?query=${encodeURIComponent(query)}`);
   return (data.results ?? []).map((r: any): SearchResult => {
