@@ -75,8 +75,9 @@ export async function deleteBySource(source: string, sourceId: string): Promise<
 export const q = {
   byId: (id: number) => db.select().from(items).where(eq(items.id, id)),
   all: () => db.select().from(items).orderBy(desc(items.updatedAt)),
-  // Just the source ids in the library — used to mark search results as already added.
-  sourceIds: () => db.select({ source: items.source, sourceId: items.sourceId }).from(items),
+  // Source ids (+ local id) in the library — marks search results as added and maps back to items.
+  sourceIds: () =>
+    db.select({ id: items.id, source: items.source, sourceId: items.sourceId }).from(items),
   byCategory: (category: Category) =>
     db.select().from(items).where(eq(items.category, category)).orderBy(desc(items.updatedAt)),
   byStatus: (status: Status) =>

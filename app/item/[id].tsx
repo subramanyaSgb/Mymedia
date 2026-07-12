@@ -548,7 +548,7 @@ function CatalogRail({
   category: 'movie' | 'series';
 }) {
   const inLib = useLiveQuery(q.sourceIds());
-  const libMap = new Map(inLib.data.map((r) => [`${r.source}-${r.sourceId}`, true]));
+  const libMap = new Map(inLib.data.map((r) => [`${r.source}-${r.sourceId}`, r.id]));
 
   if (entries.length === 0) return null;
 
@@ -573,9 +573,19 @@ function CatalogRail({
       <SectionHeader title={title} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.castScroll}>
         {entries.map((e) => {
-          const added = libMap.has(`tmdb-${e.id}`);
+          const existingId = libMap.get(`tmdb-${e.id}`);
+          const added = existingId != null;
           return (
-            <View key={e.id} style={styles.seriesCard}>
+            <Pressable
+              key={e.id}
+              accessibilityRole="button"
+              accessibilityLabel={e.title}
+              onPress={() =>
+                added
+                  ? router.push({ pathname: '/item/[id]', params: { id: String(existingId) } })
+                  : add(e)
+              }
+              style={({ pressed }) => [styles.seriesCard, pressed && { opacity: 0.85 }]}>
               {e.poster ? (
                 <Image source={{ uri: e.poster }} style={styles.seriesImage} contentFit="cover" transition={250} />
               ) : (
@@ -583,14 +593,9 @@ function CatalogRail({
                   <Icon name={CATEGORY_ICON[category]} size={24} color={colors.textFaint} />
                 </View>
               )}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={added ? `${e.title} is in your library` : `Add ${e.title}`}
-                disabled={added}
-                onPress={() => add(e)}
-                style={[styles.railAddBtn, added && styles.railAddBtnDone]}>
+              <View style={[styles.railAddBtn, added && styles.railAddBtnDone]}>
                 <Icon name={added ? 'checkmark' : 'add'} size={16} color={colors.onAccent} />
-              </Pressable>
+              </View>
               <Text variant="caption" numberOfLines={2} style={styles.seriesTitle}>
                 {e.title}
               </Text>
@@ -599,7 +604,7 @@ function CatalogRail({
                   {e.year}
                 </Text>
               ) : null}
-            </View>
+            </Pressable>
           );
         })}
       </ScrollView>

@@ -1,13 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
-import { View, ScrollView, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
+import { Alert, View, ScrollView, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { fetchPersonDetails, fetchPersonCredits } from '@/api/tmdb';
 import { syncItemData } from '@/api/sync';
 import { Chip, haptic, Icon, SectionHeader, Text } from '@/components/ui';
+import { STATUS_LABEL } from '@/constants/categories';
 import { colors, space, radius } from '@/constants/theme';
-import { addItem, q } from '@/db/queries';
+import { ensureRuntime } from '@/api/runtime';
+import { addItem, q, setStatus } from '@/db/queries';
+import type { Status } from '@/db/schema';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 
 // One entry in the person's filmography, normalized from TMDB combined_credits.
@@ -36,10 +39,10 @@ export default function PersonScreen() {
   const [loading, setLoading] = useState(true);
   const [bioExpanded, setBioExpanded] = useState(false);
 
-  // Live library membership so add buttons flip instantly.
+  // Live library membership so add buttons flip instantly. Maps tmdb key → local item id.
   const inLib = useLiveQuery(q.sourceIds());
-  const libKeys = useMemo(
-    () => new Set(inLib.data.map((r) => `${r.source}-${r.sourceId}`)),
+  const libMap = useMemo(
+    () => new Map(inLib.data.map((r) => [`${r.source}-${r.sourceId}`, r.id])),
     [inLib.data]
   );
 
@@ -97,7 +100,7 @@ export default function PersonScreen() {
 
   const filtered = films.filter((f) => filter === 'all' || f.mediaType === filter);
 
-  const add = async (f: FilmEntry) => {
+  const add = async (f: FilmEntry, status: Status = 'want') => {
     haptic.success();
     const category = f.mediaType === 'movie' ? 'movie' : 'series';
     const newId = await addItem({
@@ -109,9 +112,47 @@ export default function PersonScreen() {
       year: f.year,
       catalogRating: f.rating,
       metadata: JSON.stringify({ overview: f.overview }),
-      status: 'want',
+      status,
     });
     syncItemData(newId, String(f.tmdbId), category);
+    if (status === 'finished') {
+      const [row] = await q.byId(newId);
+      if (row) void ensureRuntime(row);
+    }
+  };
+
+  // Long-press: pick a status — adds if new, updates if already in the library.
+  const pickStatus = (f: FilmEntry, existingId?: number) => {
+    const options: Status[] = ['want', 'watching', 'finished'];
+    Alert.alert(
+      f.title,
+      existingId ? 'Update status' : 'Add to which list?',
+      [
+        ...options.map((s) => ({
+          text: STATUS_LABEL[s],
+          onPress: async () => {
+            if (existingId) {
+              await setStatus(existingId, s);
+              if (s === 'finished') {
+                const [row] = await q.byId(existingId);
+                if (row) void ensureRuntime(row);
+              }
+              haptic.success();
+            } else {
+              await add(f, s);
+            }
+          },
+        })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  // Tap: open detail when it's in the library, otherwise offer to add.
+  const open = (f: FilmEntry, existingId?: number) => {
+    if (existingId) router.push({ pathname: '/item/[id]', params: { id: String(existingId) } });
+    else pickStatus(f);
   };
 
   if (loading) {
@@ -188,38 +229,50 @@ export default function PersonScreen() {
             <Text color={colors.textMuted}>No filmography available</Text>
           </View>
         ) : (
-          <View style={styles.grid}>
-            {filtered.map((f) => {
-              const added = libKeys.has(`tmdb-${f.tmdbId}`);
-              return (
-                <View key={`${f.mediaType}-${f.tmdbId}`} style={styles.gridItem}>
-                  <View>
-                    {f.poster ? (
-                      <Image source={{ uri: f.poster }} style={styles.poster} contentFit="cover" />
-                    ) : (
-                      <View style={[styles.poster, styles.posterFallback]}>
-                        <Icon name="image" size={32} color={colors.textFaint} />
-                      </View>
-                    )}
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={added ? `${f.title} is in your library` : `Add ${f.title}`}
-                      disabled={added}
-                      onPress={() => add(f)}
-                      style={[styles.addBtn, added && styles.addBtnDone]}>
-                      <Icon name={added ? 'checkmark' : 'add'} size={18} color={colors.onAccent} />
-                    </Pressable>
-                  </View>
-                  <Text variant="caption" numberOfLines={2} style={styles.title}>
-                    {f.title}
-                  </Text>
-                  <Text variant="micro" color={colors.textMuted} numberOfLines={1}>
-                    {[f.year, f.role].filter(Boolean).join(' · ')}
-                  </Text>
-                </View>
-              );
-            })}
-          </View>
+          <>
+            <Text variant="micro" color={colors.textFaint} style={styles.hint}>
+              Tap to open or add · long-press to pick a status
+            </Text>
+            <View style={styles.grid}>
+              {filtered.map((f) => {
+                const existingId = libMap.get(`tmdb-${f.tmdbId}`);
+                const added = existingId != null;
+                return (
+                  <Pressable
+                    key={`${f.mediaType}-${f.tmdbId}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={f.title}
+                    onPress={() => open(f, existingId)}
+                    onLongPress={() => pickStatus(f, existingId)}
+                    delayLongPress={280}
+                    style={({ pressed }) => [styles.gridItem, pressed && { opacity: 0.85 }]}>
+                    <View>
+                      {f.poster ? (
+                        <Image source={{ uri: f.poster }} style={styles.poster} contentFit="cover" />
+                      ) : (
+                        <View style={[styles.poster, styles.posterFallback]}>
+                          <Icon name="image" size={32} color={colors.textFaint} />
+                        </View>
+                      )}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={added ? `Open ${f.title}` : `Add ${f.title}`}
+                        onPress={() => (added ? open(f, existingId) : add(f))}
+                        style={[styles.addBtn, added && styles.addBtnDone]}>
+                        <Icon name={added ? 'checkmark' : 'add'} size={18} color={colors.onAccent} />
+                      </Pressable>
+                    </View>
+                    <Text variant="caption" numberOfLines={2} style={styles.title}>
+                      {f.title}
+                    </Text>
+                    <Text variant="micro" color={colors.textMuted} numberOfLines={1}>
+                      {[f.year, f.role].filter(Boolean).join(' · ')}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
         )}
       </View>
     </ScrollView>
@@ -240,7 +293,8 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: space.lg },
   bio: { lineHeight: 21, marginBottom: space.xs },
 
-  filterRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.lg },
+  filterRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.md },
+  hint: { marginBottom: space.md },
 
   empty: { paddingVertical: space.xl, alignItems: 'center' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
