@@ -6,6 +6,10 @@ import { colors, radius, space } from '@/constants/theme';
 import { getStats, q, type Stats } from '@/db/queries';
 import type { Category } from '@/db/schema';
 import { TrendingHorizontalScroll, fetchTrendingGridData } from '@/app/trending';
+import { OttHorizontalScroll, type OttEntry } from '@/app/ott';
+import { getForYouFeed } from '@/app/foryou';
+import { discoverOttReleases } from '@/api/tmdb';
+import { router } from 'expo-router';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -38,6 +42,8 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [trending, setTrending] = useState<any[]>([]);
   const [trendingLoading, setTrendingLoading] = useState(false);
+  const [ott, setOtt] = useState<OttEntry[]>([]);
+  const [hasNews, setHasNews] = useState(false);
   const [filter, setFilter] = useState<Category | 'all'>('all');
   const { width } = useWindowDimensions();
 
@@ -55,16 +61,30 @@ export default function HomeScreen() {
     }
   }, []);
 
+  const loadOtt = useCallback(async () => {
+    try {
+      setOtt((await discoverOttReleases()) as OttEntry[]);
+    } catch {}
+  }, []);
+
+  const loadNews = useCallback(async () => {
+    try {
+      setHasNews((await getForYouFeed()).length > 0);
+    } catch {}
+  }, []);
+
   useFocusEffect(useCallback(() => {
     void loadStats();
     void loadTrending();
-  }, [loadStats, loadTrending]));
+    void loadOtt();
+    void loadNews();
+  }, [loadStats, loadTrending, loadOtt, loadNews]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadStats(), loadTrending()]);
+    await Promise.all([loadStats(), loadTrending(), loadOtt()]);
     setRefreshing(false);
-  }, [loadStats, loadTrending]);
+  }, [loadStats, loadTrending, loadOtt]);
 
   const byFilter = <T extends { category: Category }>(rows: T[]) =>
     filter === 'all' ? rows : rows.filter((r) => r.category === filter);
@@ -87,6 +107,14 @@ export default function HomeScreen() {
           </Text>
           <Text variant="display">Your library</Text>
         </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="What's new for you"
+          onPress={() => router.push('/foryou')}
+          style={styles.bell}>
+          <Icon name="notifications-outline" size={20} color={colors.text} />
+          {hasNews ? <View style={styles.bellDot} /> : null}
+        </Pressable>
         <View style={styles.avatar}>
           <Icon name="person" size={20} color={colors.accent} />
         </View>
@@ -128,6 +156,13 @@ export default function HomeScreen() {
         </>
       )}
 
+      {ott.length > 0 ? (
+        <>
+          <SectionHeader title="New on OTT" right={<SeeAll href="/ott" />} />
+          <OttHorizontalScroll items={ott} cardWidth={110} />
+        </>
+      ) : null}
+
       {trendingLoading ? (
         <>
           <SectionHeader title="Trending Now" />
@@ -155,7 +190,26 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  topRow: { flexDirection: 'row', alignItems: 'center' },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  bell: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellDot: {
+    position: 'absolute',
+    top: 8,
+    right: 9,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+  },
   avatar: {
     width: 40,
     height: 40,

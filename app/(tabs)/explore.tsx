@@ -1,9 +1,12 @@
 import { ensureRuntime } from '@/api/runtime';
+import { searchGames } from '@/api/games';
 import { searchJikan } from '@/api/jikan';
+import { searchSongs } from '@/api/music';
 import { syncItemData } from '@/api/sync';
 import { searchTmdb, tmdbConfigured } from '@/api/tmdb';
 import type { SearchResult } from '@/api/types';
 import { StatusPicker } from '@/components/StatusPicker';
+import { LANGUAGES } from '@/constants/languages';
 import { Chip, EmptyState, haptic, Icon, Poster, Screen, Skeleton, Text } from '@/components/ui';
 import { useDebounced } from '@/components/useDebounced';
 import { CATEGORY_ICON } from '@/constants/categories';
@@ -13,13 +16,22 @@ import type { Category, Item, Status } from '@/db/schema';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 const TABS: { key: Category; label: string }[] = [
   { key: 'movie', label: 'Movies' },
   { key: 'series', label: 'Series' },
   { key: 'anime', label: 'Anime' },
+  { key: 'song', label: 'Songs' },
+  { key: 'game', label: 'Games' },
 ];
+
+async function runSearch(tab: Category, query: string): Promise<SearchResult[]> {
+  if (tab === 'anime') return searchJikan(query);
+  if (tab === 'song') return searchSongs(query);
+  if (tab === 'game') return searchGames(query);
+  return searchTmdb(tab as 'movie' | 'series', query);
+}
 
 export default function ExploreScreen() {
   const params = useLocalSearchParams<{ category?: Category }>();
@@ -45,8 +57,7 @@ export default function ExploreScreen() {
       setLoading(true);
       setError(null);
       try {
-        const hits =
-          tab === 'anime' ? await searchJikan(debounced) : await searchTmdb(tab as 'movie' | 'series', debounced);
+        const hits = await runSearch(tab, debounced);
         if (!cancelled) setResults(hits);
       } catch (e: any) {
         if (!cancelled) {
@@ -87,14 +98,28 @@ export default function ExploreScreen() {
   // Long-press → themed status sheet. Tap → quick-add as "Want".
   const [pending, setPending] = useState<SearchResult | null>(null);
 
-  const needsToken = tab !== 'anime' && !tmdbConfigured();
-  const showEmpty = !loading && !error && debounced.trim().length >= 2 && results.length === 0 && !needsToken;
+  // Language filter — only meaningful for TMDB results (movies/series).
+  const [language, setLanguage] = useState<string | 'all'>('all');
+  const isTmdbTab = tab === 'movie' || tab === 'series';
+  const shown =
+    isTmdbTab && language !== 'all'
+      ? results.filter((r) => {
+          try {
+            return JSON.parse(r.metadata ?? '{}').originalLanguage === language;
+          } catch {
+            return false;
+          }
+        })
+      : results;
+
+  const needsToken = isTmdbTab && !tmdbConfigured();
+  const showEmpty = !loading && !error && debounced.trim().length >= 2 && shown.length === 0 && !needsToken;
 
   return (
     <Screen scroll={false} padded={false}>
       <View style={styles.header}>
         <Text variant="caption" color={colors.textFaint}>
-          Movies · Series · Anime
+          Movies · Series · Anime · Songs · Games
         </Text>
         <Text variant="display" style={styles.title}>
           Explore
@@ -116,7 +141,7 @@ export default function ExploreScreen() {
             </Pressable>
           ) : null}
         </View>
-        <View style={styles.tabs}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
           {TABS.map((t) => (
             <Chip
               key={t.key}
@@ -126,7 +151,15 @@ export default function ExploreScreen() {
               onPress={() => setTab(t.key)}
             />
           ))}
-        </View>
+        </ScrollView>
+        {isTmdbTab ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.langRow}>
+            <Chip label="All" active={language === 'all'} onPress={() => setLanguage('all')} />
+            {LANGUAGES.map((l) => (
+              <Chip key={l.code} label={l.label} active={language === l.code} onPress={() => setLanguage(l.code)} />
+            ))}
+          </ScrollView>
+        ) : null}
         <Text variant="micro" color={colors.textFaint} style={styles.hint}>
           Tap + to add · long-press to pick a list · tap ✓ to remove
         </Text>
@@ -162,7 +195,7 @@ export default function ExploreScreen() {
         </View>
       ) : (
         <FlatList
-          data={results}
+          data={shown}
           keyExtractor={(r) => r.key}
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
@@ -254,7 +287,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
   },
   search: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 12 },
-  tabs: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
+  tabs: { flexDirection: 'row', gap: space.sm, marginTop: space.md, paddingRight: space.lg },
+  langRow: { flexDirection: 'row', gap: space.sm, marginTop: space.sm, paddingRight: space.lg },
   hint: { marginTop: space.sm },
   pad: { paddingHorizontal: space.lg },
   list: { padding: space.lg, gap: space.md },

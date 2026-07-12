@@ -1,9 +1,18 @@
 import { ensureRuntime } from '@/api/runtime';
 import { syncItemData } from '@/api/sync';
-import { fetchCollection, fetchTvRecommendations, tmdbConfigured } from '@/api/tmdb';
+import {
+  fetchCollection,
+  fetchTvRecommendations,
+  fetchVideos,
+  fetchWatchProviders,
+  tmdbConfigured,
+} from '@/api/tmdb';
 import { CollectionPicker } from '@/components/CollectionPicker';
+import { TrailerPlayer } from '@/components/TrailerPlayer';
 import { Button, Chip, haptic, Icon, SectionHeader, Text } from '@/components/ui';
 import { CATEGORY_ICON, CATEGORY_LABEL, STATUS_ICON, STATUSES } from '@/constants/categories';
+import { languageName } from '@/constants/languages';
+import { PROVIDER_LINKS } from '@/constants/providers';
 import { colors, radius, space } from '@/constants/theme';
 import {
   addItem,
@@ -25,6 +34,7 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -143,6 +153,11 @@ export default function DetailScreen() {
                 {meta.artist}
               </Text>
             ) : null}
+            {meta.originalLanguage ? (
+              <Text variant="caption" muted>
+                {languageName(meta.originalLanguage)}
+              </Text>
+            ) : null}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={item.favorite ? 'Remove from favorites' : 'Add to favorites'}
@@ -223,6 +238,14 @@ export default function DetailScreen() {
           </>
         ) : null}
       </View>
+
+      {/* Trailer + streaming providers for TMDB titles. */}
+      {item.source === 'tmdb' && item.sourceId ? (
+        <>
+          <TrailerSection kind={item.category === 'movie' ? 'movie' : 'series'} sourceId={item.sourceId} />
+          <WhereToWatchSection kind={item.category === 'movie' ? 'movie' : 'series'} sourceId={item.sourceId} />
+        </>
+      ) : null}
 
       {/* Cast — clickable, opens the person's profile + filmography. */}
       <CastSection itemId={item.id} />
@@ -346,6 +369,84 @@ function Stepper({ label, value, onDec, onInc }: { label: string; value: number;
           <Icon name="add" size={18} color={colors.text} />
         </Pressable>
       </View>
+    </View>
+  );
+}
+
+function TrailerSection({ kind, sourceId }: { kind: 'movie' | 'series'; sourceId: string }) {
+  const [video, setVideo] = useState<{ key: string; name: string } | null>(null);
+
+  useEffect(() => {
+    if (!tmdbConfigured()) return;
+    fetchVideos(kind, sourceId)
+      .then((videos) => setVideo(videos[0] ?? null))
+      .catch(() => {});
+  }, [kind, sourceId]);
+
+  if (!video) return null;
+
+  return (
+    <View style={styles.section}>
+      <SectionHeader title="Trailer" />
+      <TrailerPlayer videoKey={video.key} name={video.name} />
+    </View>
+  );
+}
+
+type Provider = { id: number; name: string; logo: string | null; kind: 'stream' | 'rent' | 'buy' };
+
+function WhereToWatchSection({ kind, sourceId }: { kind: 'movie' | 'series'; sourceId: string }) {
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [tmdbLink, setTmdbLink] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!tmdbConfigured()) return;
+    fetchWatchProviders(kind, sourceId)
+      .then((r) => {
+        setProviders(r.providers);
+        setTmdbLink(r.link);
+      })
+      .catch(() => {});
+  }, [kind, sourceId]);
+
+  if (providers.length === 0) return null;
+
+  const open = (p: Provider) => {
+    haptic.light();
+    const url = PROVIDER_LINKS[p.id]?.url ?? tmdbLink;
+    if (url) Linking.openURL(url).catch(() => {});
+  };
+
+  return (
+    <View style={styles.section}>
+      <SectionHeader title="Where to Watch" />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.providerScroll}>
+        {providers.map((p) => (
+          <Pressable
+            key={p.id}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${p.name}`}
+            onPress={() => open(p)}
+            style={({ pressed }) => [styles.providerCard, pressed && { opacity: 0.8 }]}>
+            {p.logo ? (
+              <Image source={{ uri: p.logo }} style={styles.providerLogo} contentFit="cover" />
+            ) : (
+              <View style={[styles.providerLogo, styles.providerLogoFallback]}>
+                <Icon name="tv-outline" size={20} color={colors.textFaint} />
+              </View>
+            )}
+            <Text variant="micro" numberOfLines={1} style={styles.providerName}>
+              {p.name}
+            </Text>
+            <Text variant="micro" color={colors.textFaint}>
+              {p.kind === 'stream' ? 'STREAM' : p.kind === 'rent' ? 'RENT' : 'BUY'}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+      <Text variant="micro" color={colors.textFaint} style={styles.providerHint}>
+        Tap to open the app — search the title there
+      </Text>
     </View>
   );
 }
@@ -662,6 +763,12 @@ const styles = StyleSheet.create({
   delete: { marginTop: space.xxl },
 
   section: { paddingHorizontal: space.lg, marginTop: space.lg },
+  providerScroll: { gap: space.md, paddingRight: space.lg },
+  providerCard: { width: 72, alignItems: 'center', gap: 3 },
+  providerLogo: { width: 52, height: 52, borderRadius: radius.md },
+  providerLogoFallback: { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  providerName: { width: 72, textAlign: 'center' },
+  providerHint: { marginTop: space.sm },
   castScroll: { gap: space.md, paddingRight: space.lg },
   castCard: { width: 100, gap: space.xs, alignItems: 'center' },
   castImage: { width: 100, height: 140, borderRadius: radius.md },

@@ -45,6 +45,8 @@ export type Metadata = {
   creator?: string; // books/games — author/studio
   overview?: string;
   genres?: string[];
+  originalLanguage?: string; // ISO 639-1 (te/ta/hi/en/ja/…)
+  releaseDate?: string; // YYYY-MM-DD — used by the For You feed
   collectionId?: number; // TMDB collection ("same series" for movies)
   collectionName?: string;
 };

@@ -230,6 +230,19 @@ export async function getGenreStats(): Promise<Array<{ genre: string; count: num
     .sort((a, b) => b.count - a.count);
 }
 
+// Language stats: parse originalLanguage from metadata
+export async function getLanguageStats(): Promise<Array<{ genre: string; count: number }>> {
+  const allItems = await db.select().from(items);
+  const counts: Record<string, number> = {};
+  for (const item of allItems) {
+    const lang = parseMetadata(item.metadata).originalLanguage;
+    if (lang) counts[lang] = (counts[lang] || 0) + 1;
+  }
+  return Object.entries(counts)
+    .map(([genre, count]) => ({ genre, count })) // 'genre' key so GenreChart renders it directly
+    .sort((a, b) => b.count - a.count);
+}
+
 // Rating distribution: count items by user rating
 export async function getRatingDistribution(): Promise<Array<{ rating: number; count: number }>> {
   const rows = await db

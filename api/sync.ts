@@ -97,6 +97,8 @@ export async function syncItemDetails(itemId: number, sourceId: string, category
       meta.runtime = d.runtime || meta.runtime;
       meta.genres = d.genres?.map((g: any) => g.name) ?? meta.genres;
       meta.overview = d.overview || meta.overview;
+      meta.originalLanguage = d.original_language ?? meta.originalLanguage;
+      meta.releaseDate = d.release_date ?? meta.releaseDate;
       if (d.belongs_to_collection) {
         meta.collectionId = d.belongs_to_collection.id;
         meta.collectionName = d.belongs_to_collection.name;
@@ -107,6 +109,7 @@ export async function syncItemDetails(itemId: number, sourceId: string, category
       meta.episodes = d.number_of_episodes ?? meta.episodes;
       meta.genres = d.genres?.map((g: any) => g.name) ?? meta.genres;
       meta.overview = d.overview || meta.overview;
+      meta.originalLanguage = d.original_language ?? meta.originalLanguage;
       const perEp = d.episode_run_time?.[0] ?? 0;
       if (!meta.runtime && perEp && d.number_of_episodes) meta.runtime = perEp * d.number_of_episodes;
     }

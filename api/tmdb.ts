@@ -64,7 +64,7 @@ export async function searchTmdb(kind: Kind, query: string): Promise<SearchResul
       imageUrl: r.poster_path ? `${IMG}${r.poster_path}` : null,
       year: date ? Number(date.slice(0, 4)) : null,
       catalogRating: r.vote_average ?? null,
-      metadata: JSON.stringify({ overview: r.overview, genres }),
+      metadata: JSON.stringify({ overview: r.overview, genres, originalLanguage: r.original_language }),
     };
   });
 }
@@ -134,4 +134,73 @@ export async function fetchCollection(collectionId: number): Promise<any> {
 // Related shows for a TV series.
 export async function fetchTvRecommendations(tvId: string): Promise<any> {
   return tmdb(`/tv/${tvId}/recommendations`);
+}
+
+// YouTube trailers/teasers for an item. Returns [{key, name, type}] best-first.
+export async function fetchVideos(kind: Kind, id: string): Promise<{ key: string; name: string; type: string }[]> {
+  const endpoint = kind === 'movie' ? 'movie' : 'tv';
+  const data = await tmdb(`/${endpoint}/${id}/videos`);
+  return ((data.results ?? []) as any[])
+    .filter((v) => v.site === 'YouTube' && (v.type === 'Trailer' || v.type === 'Teaser'))
+    .sort((a, b) => (a.type === 'Trailer' ? -1 : 1) - (b.type === 'Trailer' ? -1 : 1) || (b.official ? 1 : 0))
+    .map((v) => ({ key: v.key, name: v.name, type: v.type }));
+}
+
+// Streaming providers for India. Returns {link, providers: [{id, name, logo, kind}]}.
+export async function fetchWatchProviders(
+  kind: Kind,
+  id: string
+): Promise<{ link: string | null; providers: { id: number; name: string; logo: string | null; kind: 'stream' | 'rent' | 'buy' }[] }> {
+  const endpoint = kind === 'movie' ? 'movie' : 'tv';
+  const data = await tmdb(`/${endpoint}/${id}/watch/providers`);
+  const region = data.results?.IN;
+  if (!region) return { link: null, providers: [] };
+  const seen = new Set<number>();
+  const providers: { id: number; name: string; logo: string | null; kind: 'stream' | 'rent' | 'buy' }[] = [];
+  const push = (list: any[] | undefined, k: 'stream' | 'rent' | 'buy') => {
+    for (const p of list ?? []) {
+      if (seen.has(p.provider_id)) continue;
+      seen.add(p.provider_id);
+      providers.push({
+        id: p.provider_id,
+        name: p.provider_name,
+        logo: p.logo_path ? `https://image.tmdb.org/t/p/w92${p.logo_path}` : null,
+        kind: k,
+      });
+    }
+  };
+  push(region.flatrate, 'stream');
+  push(region.rent, 'rent');
+  push(region.buy, 'buy');
+  return { link: region.link ?? null, providers };
+}
+
+// This fortnight's OTT releases in India (movies + tv), newest first.
+export async function discoverOttReleases(language?: string): Promise<any[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const lang = language ? `&with_original_language=${language}` : '';
+  const common = `watch_region=IN&with_watch_monetization_types=flatrate${lang}`;
+  const [movies, tv] = await Promise.all([
+    tmdb(`/discover/movie?${common}&primary_release_date.gte=${twoWeeksAgo}&primary_release_date.lte=${today}&sort_by=primary_release_date.desc`),
+    tmdb(`/discover/tv?${common}&first_air_date.gte=${twoWeeksAgo}&first_air_date.lte=${today}&sort_by=first_air_date.desc`),
+  ]);
+  const mapEntry = (r: any, kind: 'movie' | 'series') => ({
+    kind,
+    sourceId: String(r.id),
+    title: kind === 'movie' ? r.title : r.name,
+    imageUrl: r.poster_path ? `${IMG}${r.poster_path}` : null,
+    date: kind === 'movie' ? r.release_date : r.first_air_date,
+    year: (() => {
+      const d = kind === 'movie' ? r.release_date : r.first_air_date;
+      return d ? Number(d.slice(0, 4)) : null;
+    })(),
+    catalogRating: r.vote_average ?? null,
+    overview: r.overview ?? '',
+    language: r.original_language ?? null,
+  });
+  return [
+    ...(movies.results ?? []).map((r: any) => mapEntry(r, 'movie')),
+    ...(tv.results ?? []).map((r: any) => mapEntry(r, 'series')),
+  ].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
 }
