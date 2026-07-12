@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, View, ActivityIndicator, useWindowDimensions, ScrollView } from 'react-native';
+import { FlatList, StyleSheet, View, ActivityIndicator, ScrollView } from 'react-native';
 import { Stack } from 'expo-router';
 import { fetchTrendingMovies } from '@/api/tmdb';
 import { Screen, SectionHeader, Text, EmptyState } from '@/components/ui';
@@ -22,20 +22,23 @@ export async function fetchTrendingGridData() {
   }));
 }
 
-export function TrendingGridView({ items, width, cardWidth }: { items: any[]; width: number; cardWidth?: number }) {
+// Renders inside an already-padded parent (Screen): measures its own width via
+// onLayout — never the window width, which lies on edge-to-edge Android.
+export function TrendingGridView({ items }: { items: any[] }) {
   const gap = space.md;
-  const pad = space.lg;
-  const calculatedCardWidth = cardWidth || (width - pad * 2 - gap * (COLS - 1)) / COLS;
+  const [gridW, setGridW] = useState(0);
+  const cardW = Math.floor((gridW - gap * (COLS - 1)) / COLS);
 
   return (
     <FlatList
-      data={items}
+      onLayout={(e) => setGridW(e.nativeEvent.layout.width)}
+      data={gridW > 0 ? items : []}
       numColumns={COLS}
       columnWrapperStyle={{ gap }}
-      contentContainerStyle={{ paddingHorizontal: pad, gap }}
+      contentContainerStyle={{ gap }}
       scrollEnabled={false}
       keyExtractor={(item) => item.sourceId}
-      renderItem={({ item }) => <MediaCard item={item} width={calculatedCardWidth} />}
+      renderItem={({ item }) => <MediaCard item={item} width={cardW} />}
     />
   );
 }
@@ -53,7 +56,6 @@ export function TrendingHorizontalScroll({ items, cardWidth = 110 }: { items: an
 export default function TrendingScreen() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const { width } = useWindowDimensions();
 
   useEffect(() => {
     loadTrending();
@@ -95,7 +97,7 @@ export default function TrendingScreen() {
     <Screen>
       <Stack.Screen options={{ title: 'Trending Now' }} />
       <SectionHeader title="Popular This Week" />
-      <TrendingGridView items={items} width={width} />
+      <TrendingGridView items={items} />
     </Screen>
   );
 }

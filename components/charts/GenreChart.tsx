@@ -1,4 +1,4 @@
-import { View, StyleSheet, Dimensions, ScrollView } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { colors, space } from '@/constants/theme';
 import { Text } from '../ui/Text';
 
@@ -54,7 +54,7 @@ export function GenreChart({ data }: GenreChartProps) {
 const styles = StyleSheet.create({
   container: { marginVertical: space.lg },
   title: { marginBottom: space.md },
-  chartWrapper: { width: Dimensions.get('window').width - 32 },
+  chartWrapper: { width: '100%' },
   barRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: space.xs, borderBottomWidth: 1, borderBottomColor: colors.border },
   label: { width: 80 },
   barContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', marginLeft: space.md, gap: space.sm },
