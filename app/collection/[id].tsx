@@ -4,7 +4,8 @@ import { colors, space } from '@/constants/theme';
 import { cq, type Item } from '@/db/queries';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { FlatList, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useState } from 'react';
+import { FlatList, StyleSheet, View } from 'react-native';
 
 const COLS = 3;
 
@@ -14,10 +15,10 @@ export default function CollectionScreen() {
   const { data: rows } = useLiveQuery(cq.items(Number(id)));
   const data = (rows ?? []).map((r) => r.item);
 
-  const { width } = useWindowDimensions();
+  const [listW, setListW] = useState(0);
   const gap = space.md;
   const pad = space.lg;
-  const cardW = (width - pad * 2 - gap * (COLS - 1)) / COLS;
+  const cardW = Math.floor((listW - pad * 2 - gap * (COLS - 1)) / COLS);
 
   const remainder = data.length % COLS;
   const padded = remainder === 0 ? data : [...data, ...Array(COLS - remainder).fill(null)];
@@ -26,7 +27,8 @@ export default function CollectionScreen() {
     <View style={styles.container}>
       <Stack.Screen options={{ title: info?.[0]?.name ?? 'Collection' }} />
       <FlatList
-        data={padded}
+        onLayout={(e) => setListW(e.nativeEvent.layout.width)}
+        data={listW > 0 ? padded : []}
         keyExtractor={(i: Item | null, idx) => (i ? String(i.id) : `spacer-${idx}`)}
         numColumns={COLS}
         columnWrapperStyle={{ gap }}
@@ -35,11 +37,13 @@ export default function CollectionScreen() {
           item ? <MediaCard item={item} width={cardW} /> : <View style={{ width: cardW }} />
         }
         ListEmptyComponent={
-          <EmptyState
-            icon="albums-outline"
-            title="Empty collection"
-            subtitle="Add items from their detail page → Add to collection."
-          />
+          listW > 0 ? (
+            <EmptyState
+              icon="albums-outline"
+              title="Empty collection"
+              subtitle="Add items from their detail page → Add to collection."
+            />
+          ) : null
         }
       />
     </View>
