@@ -105,8 +105,8 @@ function TrendingCard({
           <Icon name={added ? 'checkmark' : 'add'} size={14} color={colors.onAccent} />
         </View>
       </View>
-      <View style={styles.meta}>
-        <Text variant="caption" numberOfLines={2} ellipsizeMode="tail" style={styles.titleText}>
+      <View style={[styles.meta, { width }]}>
+        <Text variant="caption" numberOfLines={2} ellipsizeMode="tail" style={[styles.titleText, { width }]}>
           {entry.title}
         </Text>
         <Text variant="micro" color={colors.textMuted}>
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   hrow: { gap: space.md, paddingRight: space.lg },
   pressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
   meta: { marginTop: space.sm, minHeight: 34 },
-  titleText: { width: '100%', lineHeight: 17 },
+  titleText: { lineHeight: 17 },
   badge: {
     position: 'absolute',
     top: 6,

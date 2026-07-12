@@ -666,7 +666,7 @@ const styles = StyleSheet.create({
   castCard: { width: 100, gap: space.xs, alignItems: 'center' },
   castImage: { width: 100, height: 140, borderRadius: radius.md },
   castImageFallback: { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  castName: { textAlign: 'center', fontWeight: '600', width: '100%' },
+  castName: { textAlign: 'center', fontWeight: '600', width: 100 },
 
   crewRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm },
   crewImage: { width: 44, height: 44, borderRadius: radius.sm },
@@ -675,7 +675,7 @@ const styles = StyleSheet.create({
   seriesCard: { width: 110, gap: space.xs },
   seriesImage: { width: 110, height: 156, borderRadius: radius.md },
   seriesImageFallback: { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  seriesTitle: { fontWeight: '600', width: '100%' },
+  seriesTitle: { fontWeight: '600', width: 110, lineHeight: 17 },
   railAddBtn: {
     position: 'absolute',
     top: 6,
