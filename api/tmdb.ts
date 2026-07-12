@@ -49,7 +49,7 @@ export async function searchTmdb(kind: Kind, query: string): Promise<SearchResul
       imageUrl: r.poster_path ? `${IMG}${r.poster_path}` : null,
       year: date ? Number(date.slice(0, 4)) : null,
       catalogRating: r.vote_average ?? null,
-      metadata: JSON.stringify({ overview: r.overview }),
+      metadata: JSON.stringify({ overview: r.overview, genres: r.genre_ids ?? [] }),
     };
   });
 }
@@ -69,4 +69,34 @@ export async function fetchTmdbRuntime(kind: Kind, id: string): Promise<number |
   } catch {
     return null;
   }
+}
+
+// Fetch movie credits (cast and crew).
+export async function fetchMovieCredits(movieId: string): Promise<any> {
+  if (!CRED) throw new Error('TMDB credential not set');
+  return tmdb(`/movie/${movieId}/credits`);
+}
+
+// Fetch series credits (cast and crew).
+export async function fetchSeriesCredits(seriesId: string): Promise<any> {
+  if (!CRED) throw new Error('TMDB credential not set');
+  return tmdb(`/tv/${seriesId}/credits`);
+}
+
+// Fetch person details (bio, images, birthday, etc).
+export async function fetchPersonDetails(personId: string): Promise<any> {
+  if (!CRED) throw new Error('TMDB credential not set');
+  return tmdb(`/person/${personId}`);
+}
+
+// Fetch person's filmography and credits.
+export async function fetchPersonCredits(personId: string): Promise<any> {
+  if (!CRED) throw new Error('TMDB credential not set');
+  return tmdb(`/person/${personId}/combined_credits`);
+}
+
+// Fetch trending movies (today, this week, etc).
+export async function fetchTrendingMovies(timeWindow: 'day' | 'week' = 'week'): Promise<any> {
+  if (!CRED) throw new Error('TMDB credential not set');
+  return tmdb(`/trending/movie/${timeWindow}`);
 }

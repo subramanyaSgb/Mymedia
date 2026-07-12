@@ -137,6 +137,15 @@ export default function DetailScreen() {
         </View>
       </View>
 
+      {/* Cast section */}
+      <CastSection itemId={item.id} />
+
+      {/* Director section */}
+      <CrewSection itemId={item.id} role="director" title="Director" />
+
+      {/* Writers section */}
+      <CrewSection itemId={item.id} role="writer" title="Writers" />
+
       <View style={styles.body}>
         {/* Status — one connected segmented control, not floating chips. */}
         <View style={styles.segment}>
@@ -281,6 +290,76 @@ function Stepper({ label, value, onDec, onInc }: { label: string; value: number;
   );
 }
 
+function CastSection({ itemId }: { itemId: number }) {
+  const { data } = useLiveQuery(q.castForItem(itemId));
+
+  if (!data || data.length === 0) return null;
+
+  return (
+    <View style={styles.section}>
+      <SectionHeader title="Cast" />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.castScroll}>
+        {data.map((member) => (
+          <View key={member.id} style={styles.castCard}>
+            {member.profileImage ? (
+              <Image
+                source={{ uri: member.profileImage }}
+                style={styles.castImage}
+                contentFit="cover"
+                transition={250}
+              />
+            ) : (
+              <View style={[styles.castImage, styles.castImageFallback]}>
+                <Icon name="person" size={28} color={colors.textFaint} />
+              </View>
+            )}
+            <Text variant="caption" numberOfLines={1} style={styles.castName}>
+              {member.name}
+            </Text>
+            {member.character ? (
+              <Text variant="micro" muted numberOfLines={1}>
+                {member.character}
+              </Text>
+            ) : null}
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function CrewSection({
+  itemId,
+  role,
+  title,
+}: {
+  itemId: number;
+  role: 'director' | 'writer' | 'producer' | 'cinematographer' | 'composer';
+  title: string;
+}) {
+  const { data } = useLiveQuery(q.crewForItem(itemId, role));
+
+  if (!data || data.length === 0) return null;
+
+  return (
+    <View style={styles.section}>
+      <SectionHeader title={title} />
+      {data.map((member) => (
+        <View key={member.id} style={styles.crewRow}>
+          {member.profileImage ? (
+            <Image source={{ uri: member.profileImage }} style={styles.crewImage} contentFit="cover" transition={250} />
+          ) : (
+            <View style={[styles.crewImage, styles.crewImageFallback]}>
+              <Icon name="person" size={20} color={colors.textFaint} />
+            </View>
+          )}
+          <Text variant="body">{member.name}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: space.xxl },
@@ -351,4 +430,15 @@ const styles = StyleSheet.create({
   },
   stepperValue: { minWidth: 28, textAlign: 'center' },
   delete: { marginTop: space.xxl },
+
+  section: { paddingHorizontal: space.lg, marginTop: space.lg },
+  castScroll: { gap: space.md, paddingRight: space.lg },
+  castCard: { width: 100, gap: space.xs, alignItems: 'center' },
+  castImage: { width: 100, height: 140, borderRadius: radius.md },
+  castImageFallback: { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  castName: { textAlign: 'center', fontWeight: '600' },
+
+  crewRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm },
+  crewImage: { width: 44, height: 44, borderRadius: radius.sm },
+  crewImageFallback: { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
 });
