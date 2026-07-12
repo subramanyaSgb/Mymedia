@@ -1,63 +1,55 @@
 import { View, StyleSheet } from 'react-native';
-import { colors, space } from '@/constants/theme';
+import { colors, radius, space } from '@/constants/theme';
 import { Text } from '../ui/Text';
 
 interface GenreChartProps {
   data: Array<{ genre: string; count: number }>;
 }
 
+// Horizontal bars, naturally-sized rows (no fixed heights → nothing overlaps).
 export function GenreChart({ data }: GenreChartProps) {
-  if (!data || data.length === 0) {
-    return (
-      <View style={styles.empty}>
-        <Text color={colors.textMuted}>No genre data yet</Text>
-      </View>
-    );
-  }
+  if (!data || data.length === 0) return null;
 
-  const topGenres = data.slice(0, 10);
-  const chartData = topGenres.map((d) => d.count);
-  const maxValue = Math.max(...chartData, 1);
-  const barHeight = 200 / topGenres.length;
+  const topGenres = data.slice(0, 8);
+  const maxValue = Math.max(...topGenres.map((d) => d.count), 1);
 
   return (
-    <View style={styles.container}>
-      <Text variant="h2" style={styles.title}>
-        Top Genres
-      </Text>
-      <View style={styles.chartWrapper}>
-        {topGenres.map((genre, idx) => (
-          <View key={idx} style={[styles.barRow, { height: barHeight }]}>
-            <Text variant="micro" style={styles.label} numberOfLines={1}>
-              {genre.genre}
-            </Text>
-            <View style={styles.barContainer}>
-              <View
-                style={[
-                  styles.bar,
-                  {
-                    width: `${(genre.count / maxValue) * 90}%`,
-                  },
-                ]}
-              />
-              <Text variant="micro" color={colors.textMuted}>
-                {genre.count}
-              </Text>
-            </View>
+    <View style={styles.card}>
+      {topGenres.map((genre, idx) => (
+        <View key={idx} style={styles.row}>
+          <Text variant="micro" color={colors.textMuted} style={styles.label} numberOfLines={1}>
+            {genre.genre}
+          </Text>
+          <View style={styles.track}>
+            <View style={[styles.bar, { width: `${Math.max(4, (genre.count / maxValue) * 100)}%` }]} />
           </View>
-        ))}
-      </View>
+          <Text variant="micro" color={colors.textFaint} style={styles.count}>
+            {genre.count}
+          </Text>
+        </View>
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { marginVertical: space.lg },
-  title: { marginBottom: space.md },
-  chartWrapper: { width: '100%' },
-  barRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: space.xs, borderBottomWidth: 1, borderBottomColor: colors.border },
-  label: { width: 80 },
-  barContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', marginLeft: space.md, gap: space.sm },
-  bar: { height: 20, backgroundColor: colors.accent, borderRadius: 4 },
-  empty: { height: 200, justifyContent: 'center', alignItems: 'center' },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    padding: space.lg,
+    gap: space.md,
+  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  label: { width: 82 },
+  track: {
+    flex: 1,
+    height: 10,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceHi,
+    overflow: 'hidden',
+  },
+  bar: { height: '100%', borderRadius: radius.pill, backgroundColor: colors.accent },
+  count: { width: 26, textAlign: 'right' },
 });

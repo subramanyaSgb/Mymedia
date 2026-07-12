@@ -90,8 +90,18 @@ export default function ProfileScreen() {
         <Stat label="Completed" value={`${completion}%`} />
       </StatRow>
 
-      {watchHistory.length > 0 && <WatchHistoryChart data={watchHistory} />}
-      {genres.length > 0 && <GenreChart data={genres} />}
+      {watchHistory.length > 0 && (
+        <>
+          <SectionHeader title="Watch Activity" />
+          <WatchHistoryChart data={watchHistory} />
+        </>
+      )}
+      {genres.length > 0 && (
+        <>
+          <SectionHeader title="Top Genres" />
+          <GenreChart data={genres} />
+        </>
+      )}
 
       {ratings.length > 0 && (
         <View>
