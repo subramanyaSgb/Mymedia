@@ -85,6 +85,34 @@ export async function searchSongs(query: string): Promise<SearchResult[]> {
   return merged;
 }
 
+// Best-guess soundtrack album for a movie title: search songs by title, pick the
+// album that the most matching tracks belong to. Text match only (no movie id),
+// so it's "best match", not guaranteed. Returns the album id or null.
+export async function findSoundtrackAlbumId(movieTitle: string): Promise<string | null> {
+  try {
+    const results = await searchSongs(movieTitle);
+    const tally = new Map<string, { name: string; count: number }>();
+    for (const r of results) {
+      const meta = JSON.parse(r.metadata ?? '{}');
+      if (!meta.albumId) continue;
+      const cur = tally.get(meta.albumId) ?? { name: meta.albumName ?? '', count: 0 };
+      cur.count += 1;
+      tally.set(meta.albumId, cur);
+    }
+    if (tally.size === 0) return null;
+    // Prefer the album whose name best matches the movie title, then by track count.
+    const lc = movieTitle.toLowerCase();
+    const ranked = [...tally.entries()].sort((a, b) => {
+      const am = a[1].name.toLowerCase().includes(lc) ? 1 : 0;
+      const bm = b[1].name.toLowerCase().includes(lc) ? 1 : 0;
+      return bm - am || b[1].count - a[1].count;
+    });
+    return ranked[0][0];
+  } catch {
+    return null;
+  }
+}
+
 export type Album = {
   albumId: string;
   name: string;
@@ -108,7 +136,10 @@ export async function fetchAlbum(albumId: string): Promise<Album | null> {
       if (tracks.length === 0) return null;
       return {
         albumId,
-        name: collection?.collectionName ?? tracks[0] && JSON.parse(tracks[0].metadata!).albumName ?? 'Album',
+        name:
+          collection?.collectionName ??
+          (tracks[0] ? JSON.parse(tracks[0].metadata!).albumName : null) ??
+          'Album',
         artist: collection?.artistName ?? '',
         cover: collection?.artworkUrl100 ? String(collection.artworkUrl100).replace('100x100', '600x600') : tracks[0]?.imageUrl ?? null,
         year: collection?.releaseDate ? Number(String(collection.releaseDate).slice(0, 4)) : null,

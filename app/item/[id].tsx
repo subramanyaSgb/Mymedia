@@ -1,4 +1,5 @@
 import { ensureRuntime } from '@/api/runtime';
+import { findSoundtrackAlbumId } from '@/api/music';
 import { syncItemData } from '@/api/sync';
 import {
   fetchCollection,
@@ -262,6 +263,9 @@ export default function DetailScreen() {
         </>
       ) : null}
 
+      {/* Soundtrack — best-match album for movies. */}
+      {item.category === 'movie' ? <SoundtrackSection title={item.title} /> : null}
+
       {/* Cast — clickable, opens the person's profile + filmography. */}
       <CastSection itemId={item.id} />
 
@@ -384,6 +388,31 @@ function Stepper({ label, value, onDec, onInc }: { label: string; value: number;
           <Icon name="add" size={18} color={colors.text} />
         </Pressable>
       </View>
+    </View>
+  );
+}
+
+function SoundtrackSection({ title }: { title: string }) {
+  const [albumId, setAlbumId] = useState<string | null | 'loading'>('loading');
+
+  useEffect(() => {
+    findSoundtrackAlbumId(title).then(setAlbumId);
+  }, [title]);
+
+  if (albumId === 'loading' || !albumId) return null;
+
+  return (
+    <View style={styles.section}>
+      <SectionHeader title="Soundtrack" />
+      <Button
+        label="View soundtrack album"
+        variant="ghost"
+        icon="musical-notes-outline"
+        onPress={() => router.push({ pathname: '/album/[albumId]', params: { albumId } })}
+      />
+      <Text variant="micro" color={colors.textFaint} style={{ marginTop: space.xs }}>
+        Best match by title — open to save any track
+      </Text>
     </View>
   );
 }
