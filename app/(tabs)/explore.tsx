@@ -198,7 +198,7 @@ export default function ExploreScreen() {
                   fallbackIcon={CATEGORY_ICON[item.category]}
                 />
                 <View style={styles.rowInfo}>
-                  <Text variant="bodyStrong" numberOfLines={2}>
+                  <Text variant="bodyStrong" numberOfLines={2} ellipsizeMode="tail" style={styles.rowTitle}>
                     {item.title}
                   </Text>
                   <View style={styles.metaLine}>
@@ -272,6 +272,7 @@ const styles = StyleSheet.create({
   list: { padding: space.lg, gap: space.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   rowInfo: { flex: 1 },
+  rowTitle: { width: '100%' },
   metaLine: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
   genresRow: { flexDirection: 'row', gap: space.xs, marginTop: space.xs, flexWrap: 'wrap' },
   addBtn: {

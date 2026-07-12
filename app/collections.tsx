@@ -60,7 +60,7 @@ export default function CollectionsScreen() {
               </View>
             )}
             <View style={{ flex: 1 }}>
-              <Text variant="bodyStrong" numberOfLines={1}>
+              <Text variant="bodyStrong" numberOfLines={1} ellipsizeMode="tail" style={{ width: '100%' }}>
                 {c.name}
               </Text>
               <Text variant="micro" color={colors.textMuted}>

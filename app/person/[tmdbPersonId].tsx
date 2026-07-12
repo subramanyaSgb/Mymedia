@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
   gridItem: { width: '47.5%', marginBottom: space.md },
   poster: { width: '100%', aspectRatio: 2 / 3, borderRadius: radius.md, marginBottom: space.sm },
   posterFallback: { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  title: { marginBottom: 2 },
+  title: { marginBottom: 2, width: '100%' },
   addBtn: {
     position: 'absolute',
     top: 8,

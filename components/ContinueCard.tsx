@@ -27,7 +27,7 @@ export function ContinueCard({ item, width }: { item: Item; width: number }) {
           fallbackIcon={CATEGORY_ICON[item.category]}
         />
         <View style={styles.info}>
-          <Text variant="bodyStrong" numberOfLines={2}>
+          <Text variant="bodyStrong" numberOfLines={2} ellipsizeMode="tail" style={styles.titleText}>
             {item.title}
           </Text>
           <Text variant="micro" color={colors.textMuted} style={styles.line}>
@@ -67,6 +67,7 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   info: { flex: 1, justifyContent: 'center' },
+  titleText: { width: '100%' },
   line: { marginTop: 4 },
   playRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: space.md },
   track: { height: 3, borderRadius: radius.pill, backgroundColor: colors.surfaceHi, marginTop: 6, overflow: 'hidden' },

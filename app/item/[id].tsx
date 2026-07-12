@@ -675,7 +675,7 @@ const styles = StyleSheet.create({
   seriesCard: { width: 110, gap: space.xs },
   seriesImage: { width: 110, height: 156, borderRadius: radius.md },
   seriesImageFallback: { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  seriesTitle: { fontWeight: '600' },
+  seriesTitle: { fontWeight: '600', width: '100%' },
   railAddBtn: {
     position: 'absolute',
     top: 6,
