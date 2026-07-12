@@ -65,26 +65,28 @@ export function MediaCard({
     </>
   );
 
-  if (onPress || onLongPress) {
+  // Selection mode: taps toggle selection (no navigation).
+  if (selectionMode && onPress) {
     return (
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={item.title}
         accessibilityState={{ selected }}
         onPress={onPress}
-        onLongPress={onLongPress}
-        delayLongPress={280}
         style={({ pressed }) => [{ width }, pressed && styles.pressed]}>
         {content}
       </Pressable>
     );
   }
 
+  // Normal mode: tap ALWAYS opens the detail page; long-press (if given) enters selection.
   return (
     <Link href={`/item/${item.id}`} asChild>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={item.title}
+        onLongPress={onLongPress}
+        delayLongPress={280}
         style={({ pressed }) => [{ width }, pressed && styles.pressed]}>
         {content}
       </Pressable>
@@ -94,7 +96,7 @@ export function MediaCard({
 
 const styles = StyleSheet.create({
   pressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
-  meta: { marginTop: space.sm, height: 54, justifyContent: 'flex-start' },
+  meta: { marginTop: space.sm, minHeight: 34, justifyContent: 'flex-start' },
   titleText: { width: '100%', lineHeight: 17 },
   track: { height: 3, borderRadius: radius.pill, backgroundColor: colors.surfaceHi, marginTop: 4, overflow: 'hidden' },
   fill: { height: 3, borderRadius: radius.pill, backgroundColor: colors.accent },

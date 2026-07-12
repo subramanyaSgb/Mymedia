@@ -3,16 +3,17 @@ import { searchJikan } from '@/api/jikan';
 import { syncItemData } from '@/api/sync';
 import { searchTmdb, tmdbConfigured } from '@/api/tmdb';
 import type { SearchResult } from '@/api/types';
+import { StatusPicker } from '@/components/StatusPicker';
 import { Chip, EmptyState, haptic, Icon, Poster, Screen, Skeleton, Text } from '@/components/ui';
 import { useDebounced } from '@/components/useDebounced';
-import { CATEGORY_ICON, STATUS_LABEL } from '@/constants/categories';
+import { CATEGORY_ICON } from '@/constants/categories';
 import { colors, radius, space } from '@/constants/theme';
 import { addItem, deleteBySource, q } from '@/db/queries';
 import type { Category, Item, Status } from '@/db/schema';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActionSheetIOS, Alert, FlatList, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 const TABS: { key: Category; label: string }[] = [
   { key: 'movie', label: 'Movies' },
@@ -83,29 +84,8 @@ export default function ExploreScreen() {
     haptic.light();
   };
 
-  // Long-press → pick a status. Tap → quick-add as "Want".
-  const pickStatus = (r: SearchResult) => {
-    const options: Status[] = ['want', 'watching', 'finished'];
-    const labels = options.map((s) => STATUS_LABEL[s]);
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: [...labels, 'Cancel'], cancelButtonIndex: 3, title: r.title },
-        (i) => {
-          if (i < 3) doAdd(r, options[i]);
-        }
-      );
-    } else {
-      Alert.alert(
-        r.title,
-        'Add to which list?',
-        [
-          ...options.map((s) => ({ text: STATUS_LABEL[s], onPress: () => doAdd(r, s) })),
-          { text: 'Cancel', style: 'cancel' as const },
-        ],
-        { cancelable: true } // tap outside to dismiss without choosing
-      );
-    }
-  };
+  // Long-press → themed status sheet. Tap → quick-add as "Want".
+  const [pending, setPending] = useState<SearchResult | null>(null);
 
   const needsToken = tab !== 'anime' && !tmdbConfigured();
   const showEmpty = !loading && !error && debounced.trim().length >= 2 && results.length === 0 && !needsToken;
@@ -233,7 +213,7 @@ export default function ExploreScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={isAdded ? `Remove ${item.title}` : `Add ${item.title}`}
                   onPress={() => (isAdded ? remove(item) : doAdd(item, 'want'))}
-                  onLongPress={() => !isAdded && pickStatus(item)}
+                  onLongPress={() => !isAdded && setPending(item)}
                   delayLongPress={280}
                   hitSlop={8}
                   style={({ pressed }) => [
@@ -248,6 +228,14 @@ export default function ExploreScreen() {
           }}
         />
       )}
+
+      <StatusPicker
+        visible={pending != null}
+        title={pending?.title ?? ''}
+        subtitle="Add to which list?"
+        onSelect={(s) => pending && doAdd(pending, s)}
+        onClose={() => setPending(null)}
+      />
     </Screen>
   );
 }

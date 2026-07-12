@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Alert, View, ScrollView, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
+import { View, ScrollView, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { fetchPersonDetails, fetchPersonCredits } from '@/api/tmdb';
 import { syncItemData } from '@/api/sync';
+import { StatusPicker } from '@/components/StatusPicker';
 import { Chip, haptic, Icon, SectionHeader, Text } from '@/components/ui';
-import { STATUS_LABEL } from '@/constants/categories';
 import { colors, space, radius } from '@/constants/theme';
 import { ensureRuntime } from '@/api/runtime';
 import { addItem, q, setStatus } from '@/db/queries';
@@ -121,32 +121,23 @@ export default function PersonScreen() {
     }
   };
 
-  // Long-press: pick a status — adds if new, updates if already in the library.
-  const pickStatus = (f: FilmEntry, existingId?: number) => {
-    const options: Status[] = ['want', 'watching', 'finished'];
-    Alert.alert(
-      f.title,
-      existingId ? 'Update status' : 'Add to which list?',
-      [
-        ...options.map((s) => ({
-          text: STATUS_LABEL[s],
-          onPress: async () => {
-            if (existingId) {
-              await setStatus(existingId, s);
-              if (s === 'finished') {
-                const [row] = await q.byId(existingId);
-                if (row) void ensureRuntime(row);
-              }
-              haptic.success();
-            } else {
-              await add(f, s);
-            }
-          },
-        })),
-        { text: 'Cancel', style: 'cancel' as const },
-      ],
-      { cancelable: true }
-    );
+  // Themed status sheet — adds if new, updates if already in the library.
+  const [pending, setPending] = useState<{ film: FilmEntry; existingId?: number } | null>(null);
+
+  const pickStatus = (f: FilmEntry, existingId?: number) => setPending({ film: f, existingId });
+
+  const onPickStatus = async (s: Status) => {
+    if (!pending) return;
+    if (pending.existingId) {
+      await setStatus(pending.existingId, s);
+      if (s === 'finished') {
+        const [row] = await q.byId(pending.existingId);
+        if (row) void ensureRuntime(row);
+      }
+      haptic.success();
+    } else {
+      await add(pending.film, s);
+    }
   };
 
   // Tap: open detail when it's in the library, otherwise offer to add.
@@ -275,6 +266,14 @@ export default function PersonScreen() {
           </>
         )}
       </View>
+
+      <StatusPicker
+        visible={pending != null}
+        title={pending?.film.title ?? ''}
+        subtitle={pending?.existingId ? 'Update status' : 'Add to which list?'}
+        onSelect={onPickStatus}
+        onClose={() => setPending(null)}
+      />
     </ScrollView>
   );
 }
