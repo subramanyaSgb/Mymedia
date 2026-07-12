@@ -3,10 +3,11 @@ import { MediaCard } from '@/components/MediaCard';
 import { EmptyState, Screen, SectionHeader, Stat, StatRow, Text } from '@/components/ui';
 import { colors, space } from '@/constants/theme';
 import { getStats, q, type Stats } from '@/db/queries';
+import { TrendingHorizontalScroll, fetchTrendingGridData } from '@/app/trending';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View, ActivityIndicator } from 'react-native';
 
 function greeting() {
   const h = new Date().getHours();
@@ -21,16 +22,34 @@ export default function HomeScreen() {
   const recent = useLiveQuery(q.recentlyAdded(12));
   const [stats, setStats] = useState<Stats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [trending, setTrending] = useState<any[]>([]);
+  const [trendingLoading, setTrendingLoading] = useState(false);
   const { width } = useWindowDimensions();
 
   const loadStats = useCallback(() => getStats().then(setStats), []);
-  useFocusEffect(useCallback(() => void loadStats(), [loadStats]));
+
+  const loadTrending = useCallback(async () => {
+    try {
+      setTrendingLoading(true);
+      const data = await fetchTrendingGridData();
+      setTrending(data);
+    } catch (e) {
+      console.error('Error loading trending:', e);
+    } finally {
+      setTrendingLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(useCallback(() => {
+    void loadStats();
+    void loadTrending();
+  }, [loadStats, loadTrending]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadStats();
+    await Promise.all([loadStats(), loadTrending()]);
     setRefreshing(false);
-  }, [loadStats]);
+  }, [loadStats, loadTrending]);
 
   const empty = recent.data.length === 0;
   const featuredW = Math.min(width - space.lg * 2 - 36, 320);
@@ -73,6 +92,20 @@ export default function HomeScreen() {
         </>
       )}
 
+      {trendingLoading ? (
+        <>
+          <SectionHeader title="Trending Now" />
+          <View style={styles.trendingLoader}>
+            <ActivityIndicator color={colors.accent} />
+          </View>
+        </>
+      ) : trending.length > 0 ? (
+        <>
+          <SectionHeader title="Trending Now" />
+          <TrendingHorizontalScroll items={trending} cardWidth={110} />
+        </>
+      ) : null}
+
       <SectionHeader title="Statistics" />
       <StatRow>
         <Stat label="Days" value={stats?.daysTracked ?? 0} />
@@ -88,4 +121,5 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   hrow: { gap: space.md, paddingRight: space.lg },
   footer: { height: space.xl },
+  trendingLoader: { paddingVertical: space.lg, justifyContent: 'center', alignItems: 'center', height: 160 },
 });

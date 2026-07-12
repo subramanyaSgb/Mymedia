@@ -121,6 +121,27 @@ export const q = {
       .innerJoin(itemCredits, eq(itemCredits.itemId, items.id))
       .innerJoin(cast, and(eq(cast.id, itemCredits.creditId), eq(itemCredits.creditType, 'cast'), eq(cast.tmdbPersonId, tmdbPersonId)))
       .orderBy(desc(items.year)),
+  seriesItems: (seriesId: number) =>
+    db
+      .select({
+        id: items.id,
+        title: items.title,
+        imageUrl: items.imageUrl,
+        category: items.category,
+        year: items.year,
+        seasonNumber: itemSeries.seasonNumber,
+        episodeNumber: itemSeries.episodeNumber,
+      })
+      .from(itemSeries)
+      .innerJoin(items, eq(itemSeries.itemId, items.id))
+      .where(eq(itemSeries.seriesId, seriesId))
+      .orderBy(itemSeries.seasonNumber, itemSeries.episodeNumber),
+  seriesForItem: (itemId: number) =>
+    db
+      .select({ seriesId: itemSeries.seriesId })
+      .from(itemSeries)
+      .where(eq(itemSeries.itemId, itemId))
+      .limit(1),
 };
 
 // --- Stats (computed on read, no stats table) ---

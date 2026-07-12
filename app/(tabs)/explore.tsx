@@ -212,6 +212,20 @@ export default function ExploreScreen() {
                       </>
                     ) : null}
                   </View>
+                  {item.metadata ? (() => {
+                    try {
+                      const meta = JSON.parse(item.metadata);
+                      return meta.genres?.length > 0 ? (
+                        <View style={styles.genresRow}>
+                          {meta.genres.slice(0, 2).map((g: string, idx: number) => (
+                            <Chip key={idx} label={g} size="small" />
+                          ))}
+                        </View>
+                      ) : null;
+                    } catch {
+                      return null;
+                    }
+                  })() : null}
                 </View>
                 <Pressable
                   accessibilityRole="button"
@@ -257,6 +271,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   rowInfo: { flex: 1 },
   metaLine: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
+  genresRow: { flexDirection: 'row', gap: space.xs, marginTop: space.xs, flexWrap: 'wrap' },
   addBtn: {
     width: 44,
     height: 44,

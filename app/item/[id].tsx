@@ -113,6 +113,16 @@ export default function DetailScreen() {
                 </Text>
               </View>
             ) : null}
+            {meta.runtime && !isEpisodic ? (
+              <Text variant="caption" muted>
+                {formatRuntime(meta.runtime)}
+              </Text>
+            ) : null}
+            {isEpisodic && meta.seasons && meta.episodes ? (
+              <Text variant="caption" muted>
+                {meta.seasons} {meta.seasons === 1 ? 'season' : 'seasons'} · {meta.episodes} {meta.episodes === 1 ? 'episode' : 'episodes'}
+              </Text>
+            ) : null}
             {meta.artist ? (
               <Text variant="caption" muted>
                 {meta.artist}
@@ -145,6 +155,9 @@ export default function DetailScreen() {
 
       {/* Writers section */}
       <CrewSection itemId={item.id} role="writer" title="Writers" />
+
+      {/* From This Series section */}
+      {isEpisodic ? <SeriesSection itemId={item.id} /> : null}
 
       <View style={styles.body}>
         {/* Status — one connected segmented control, not floating chips. */}
@@ -185,6 +198,17 @@ export default function DetailScreen() {
             <Text variant="body" muted style={styles.overview}>
               {meta.overview}
             </Text>
+          </>
+        ) : null}
+
+        {meta.genres && meta.genres.length > 0 ? (
+          <>
+            <SectionHeader title="Genres" />
+            <View style={styles.genresRow}>
+              {meta.genres.map((genre, idx) => (
+                <Chip key={idx} label={genre} />
+              ))}
+            </View>
           </>
         ) : null}
 
@@ -360,6 +384,60 @@ function CrewSection({
   );
 }
 
+function SeriesSection({ itemId }: { itemId: number }) {
+  const { data: seriesData } = useLiveQuery(q.seriesForItem(itemId));
+  const seriesId = seriesData?.[0]?.seriesId;
+
+  if (!seriesId) return null;
+
+  const { data } = useLiveQuery(q.seriesItems(seriesId));
+
+  if (!data || data.length === 0) return null;
+
+  return (
+    <View style={styles.section}>
+      <SectionHeader title="From This Series" />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.castScroll}>
+        {data.map((item) => (
+          <Pressable
+            key={item.id}
+            onPress={() => router.push({ pathname: '/item/[id]', params: { id: item.id } })}
+            style={styles.seriesCard}>
+            {item.imageUrl ? (
+              <Image
+                source={{ uri: item.imageUrl }}
+                style={styles.seriesImage}
+                contentFit="cover"
+                transition={250}
+              />
+            ) : (
+              <View style={[styles.seriesImage, styles.seriesImageFallback]}>
+                <Icon name={CATEGORY_ICON[item.category]} size={24} color={colors.textFaint} />
+              </View>
+            )}
+            <Text variant="caption" numberOfLines={2} style={styles.seriesTitle}>
+              {item.title}
+            </Text>
+            {item.seasonNumber ? (
+              <Text variant="micro" muted numberOfLines={1}>
+                S{item.seasonNumber}E{item.episodeNumber}
+              </Text>
+            ) : null}
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function formatRuntime(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours === 0) return `${mins}m`;
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h ${mins}m`;
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { paddingBottom: space.xxl },
@@ -405,6 +483,7 @@ const styles = StyleSheet.create({
   segmentDivider: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border },
 
   overview: { lineHeight: 22 },
+  genresRow: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap', marginBottom: space.lg },
   starRow: { flexDirection: 'row', gap: space.md },
   notes: {
     backgroundColor: colors.surface,
@@ -441,4 +520,9 @@ const styles = StyleSheet.create({
   crewRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm },
   crewImage: { width: 44, height: 44, borderRadius: radius.sm },
   crewImageFallback: { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+
+  seriesCard: { width: 100, gap: space.xs, alignItems: 'center' },
+  seriesImage: { width: 100, height: 140, borderRadius: radius.md },
+  seriesImageFallback: { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  seriesTitle: { textAlign: 'center', fontWeight: '600' },
 });
