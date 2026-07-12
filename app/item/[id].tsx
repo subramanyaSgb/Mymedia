@@ -10,7 +10,7 @@ import {
 import { CollectionPicker } from '@/components/CollectionPicker';
 import { TrailerPlayer } from '@/components/TrailerPlayer';
 import { Button, Chip, haptic, Icon, SectionHeader, Text } from '@/components/ui';
-import { CATEGORY_ICON, CATEGORY_LABEL, STATUS_ICON, STATUSES } from '@/constants/categories';
+import { CATEGORY_ICON, CATEGORY_LABEL, CATEGORY_STATUS, STATUS_ICON, statuses } from '@/constants/categories';
 import { languageName } from '@/constants/languages';
 import { PROVIDER_LINKS } from '@/constants/providers';
 import { colors, radius, space } from '@/constants/theme';
@@ -178,9 +178,9 @@ export default function DetailScreen() {
       </View>
 
       <View style={styles.body}>
-        {/* Status — one connected segmented control. */}
+        {/* Status — one connected segmented control, category-aware vocabulary. */}
         <View style={styles.segment}>
-          {STATUSES.map((s, i) => {
+          {statuses(item.category).map((s, i) => {
             const active = item.status === s.key;
             return (
               <Pressable
@@ -203,7 +203,7 @@ export default function DetailScreen() {
                   color={active ? colors.onAccent : colors.textFaint}
                 />
                 <Text variant="micro" color={active ? colors.onAccent : colors.textMuted}>
-                  {s.key === 'want' ? 'WANT' : s.key === 'watching' ? 'WATCHING' : 'FINISHED'}
+                  {CATEGORY_STATUS[item.category].short[s.key]}
                 </Text>
               </Pressable>
             );
@@ -238,6 +238,21 @@ export default function DetailScreen() {
           </>
         ) : null}
       </View>
+
+      {/* Songs: album link (opens full soundtrack). */}
+      {item.category === 'song' && meta.albumId ? (
+        <View style={styles.section}>
+          <SectionHeader title="Album" />
+          <Button
+            label={meta.albumName ? `View "${meta.albumName}"` : 'View full album'}
+            variant="ghost"
+            icon="albums-outline"
+            onPress={() =>
+              router.push({ pathname: '/album/[albumId]', params: { albumId: meta.albumId! } })
+            }
+          />
+        </View>
+      ) : null}
 
       {/* Trailer + streaming providers for TMDB titles. */}
       {item.source === 'tmdb' && item.sourceId ? (

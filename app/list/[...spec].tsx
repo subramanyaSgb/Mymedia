@@ -2,7 +2,7 @@ import { ensureRuntime } from '@/api/runtime';
 import { CollectionPicker } from '@/components/CollectionPicker';
 import { MediaCard } from '@/components/MediaCard';
 import { Chip, EmptyState, haptic, Icon, Text } from '@/components/ui';
-import { CATEGORY_LABEL, STATUS_LABEL, STATUSES } from '@/constants/categories';
+import { CATEGORY_LABEL, CATEGORY_STATUS, HIDES_MIDDLE_STATUS, STATUS_LABEL, statuses } from '@/constants/categories';
 import { colors, radius, space } from '@/constants/theme';
 import { deleteItem, q, setStatus, type Item } from '@/db/queries';
 import type { Category, Status } from '@/db/schema';
@@ -12,15 +12,22 @@ import { useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 // Route: /list/favorites | /list/all | /list/category/<cat> | /list/status/<status>
-function resolve(spec: string[]) {
+// `category` is set when the list is scoped to one category → drives status vocabulary.
+function resolve(spec: string[]): {
+  title: string;
+  query: any;
+  statusChips: boolean;
+  category?: Category;
+} {
   if (spec[0] === 'favorites') return { title: 'Favorites', query: q.favorites(), statusChips: true };
   if (spec[0] === 'all') return { title: 'All items', query: q.all(), statusChips: true };
   if (spec[0] === 'category') {
     const cat = spec[1] as Category;
-    return { title: CATEGORY_LABEL[cat] ?? 'Category', query: q.byCategory(cat), statusChips: true };
+    return { title: CATEGORY_LABEL[cat] ?? 'Category', query: q.byCategory(cat), statusChips: true, category: cat };
   }
   if (spec[0] === 'status') {
     const st = spec[1] as Status;
+    // Mixed-category list → generic watch label.
     return { title: STATUS_LABEL[st] ?? 'Status', query: q.byStatus(st), statusChips: false };
   }
   return { title: 'List', query: q.all(), statusChips: true };
@@ -30,8 +37,10 @@ const COLS = 3;
 
 export default function ListScreen() {
   const { spec } = useLocalSearchParams<{ spec: string[] }>();
-  const { title, query, statusChips } = resolve(Array.isArray(spec) ? spec : [spec]);
-  const { data: raw } = useLiveQuery(query);
+  const { title, query, statusChips, category } = resolve(Array.isArray(spec) ? spec : [spec]);
+  const { data: rawData } = useLiveQuery(query);
+  const raw = rawData as Item[];
+  const vocab = CATEGORY_STATUS[category ?? 'movie'];
 
   // In-list search + status filter (client-side over the live rows).
   const [search, setSearch] = useState('');
@@ -123,10 +132,10 @@ export default function ListScreen() {
         {statusChips ? (
           <View style={styles.chips}>
             <Chip label="All" active={statusFilter === 'all'} onPress={() => setStatusFilter('all')} />
-            {STATUSES.map((s) => (
+            {statuses(category ?? 'movie').map((s) => (
               <Chip
                 key={s.key}
-                label={s.key === 'want' ? 'Want' : s.key === 'watching' ? 'Watching' : 'Finished'}
+                label={vocab.short[s.key].charAt(0) + vocab.short[s.key].slice(1).toLowerCase()}
                 active={statusFilter === s.key}
                 onPress={() => setStatusFilter(s.key)}
               />
@@ -148,6 +157,7 @@ export default function ListScreen() {
             <MediaCard
               item={item}
               width={cardW}
+              showProvider
               selectionMode={selectionMode}
               selected={selected.has(item.id)}
               onPress={selectionMode ? () => toggle(item.id) : undefined}
@@ -187,8 +197,18 @@ export default function ListScreen() {
           </View>
           <View style={styles.actionRow}>
             <ActionBtn icon="bookmark-outline" label="Want" onPress={() => applyStatus('want')} />
-            <ActionBtn icon="play-circle-outline" label="Watching" onPress={() => applyStatus('watching')} />
-            <ActionBtn icon="checkmark-done-outline" label="Finished" onPress={() => applyStatus('finished')} />
+            {!HIDES_MIDDLE_STATUS[category ?? 'movie'] ? (
+              <ActionBtn
+                icon="play-circle-outline"
+                label={vocab.short.watching.charAt(0) + vocab.short.watching.slice(1).toLowerCase()}
+                onPress={() => applyStatus('watching')}
+              />
+            ) : null}
+            <ActionBtn
+              icon="checkmark-done-outline"
+              label={vocab.short.finished.charAt(0) + vocab.short.finished.slice(1).toLowerCase()}
+              onPress={() => applyStatus('finished')}
+            />
             <ActionBtn icon="albums-outline" label="Collect" onPress={() => setShowCollect(true)} />
             <ActionBtn icon="trash-outline" label="Delete" danger onPress={bulkDelete} />
           </View>

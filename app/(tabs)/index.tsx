@@ -89,8 +89,13 @@ export default function HomeScreen() {
   const byFilter = <T extends { category: Category }>(rows: T[]) =>
     filter === 'all' ? rows : rows.filter((r) => r.category === filter);
 
-  const watchingRows = byFilter(watching.data);
-  const recentRows = byFilter(recent.data);
+  const isVideo = (c: Category) => c === 'movie' || c === 'series' || c === 'anime';
+
+  // Continue watching = only video categories in progress (songs/books/games don't belong here).
+  const watchingRows = byFilter(watching.data).filter((i) => isVideo(i.category));
+  // Recently added split so non-video isn't blended into the same rail.
+  const recentVideo = byFilter(recent.data).filter((i) => isVideo(i.category));
+  const recentOther = byFilter(recent.data).filter((i) => !isVideo(i.category));
 
   const empty = recent.data.length === 0;
   const featuredW = Math.min(width - space.lg * 2 - 36, 320);
@@ -147,12 +152,27 @@ export default function HomeScreen() {
             </>
           ) : null}
 
-          <SectionHeader title="Recently added" right={<SeeAll href="/list/all" />} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hrow}>
-            {recentRows.map((i) => (
-              <MediaCard key={i.id} item={i} width={110} />
-            ))}
-          </ScrollView>
+          {recentVideo.length > 0 ? (
+            <>
+              <SectionHeader title="Recently added" right={<SeeAll href="/list/all" />} />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hrow}>
+                {recentVideo.map((i) => (
+                  <MediaCard key={i.id} item={i} width={110} showProvider />
+                ))}
+              </ScrollView>
+            </>
+          ) : null}
+
+          {recentOther.length > 0 ? (
+            <>
+              <SectionHeader title="Recently saved" />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hrow}>
+                {recentOther.map((i) => (
+                  <MediaCard key={i.id} item={i} width={110} />
+                ))}
+              </ScrollView>
+            </>
+          ) : null}
         </>
       )}
 

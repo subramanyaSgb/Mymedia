@@ -1,9 +1,13 @@
 import { ListRow, Screen, SectionHeader, Text } from '@/components/ui';
-import { CATEGORIES, STATUS_ICON, STATUSES } from '@/constants/categories';
+import { CATEGORIES } from '@/constants/categories';
 import { colors } from '@/constants/theme';
 import { cq, q } from '@/db/queries';
+import type { Category } from '@/db/schema';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { router } from 'expo-router';
+
+const WATCH: Category[] = ['movie', 'series', 'anime'];
+const OTHER: Category[] = ['song', 'book', 'game'];
 
 export default function LibraryScreen() {
   const all = useLiveQuery(q.all());
@@ -11,8 +15,21 @@ export default function LibraryScreen() {
   const items = all.data;
 
   const countByCat = (key: string) => items.filter((i) => i.category === key).length;
-  const countByStatus = (key: string) => items.filter((i) => i.status === key).length;
   const favCount = items.filter((i) => i.favorite).length;
+
+  const catRow = (key: Category, last: boolean) => {
+    const c = CATEGORIES.find((x) => x.key === key)!;
+    return (
+      <ListRow
+        key={key}
+        icon={c.icon}
+        label={c.label}
+        count={countByCat(key)}
+        last={last}
+        onPress={() => router.push(`/list/category/${key}`)}
+      />
+    );
+  };
 
   return (
     <Screen>
@@ -21,17 +38,12 @@ export default function LibraryScreen() {
       </Text>
       <Text variant="display">Library</Text>
 
-      <SectionHeader title="Categories" />
-      {CATEGORIES.map((c, i) => (
-        <ListRow
-          key={c.key}
-          icon={c.icon}
-          label={c.label}
-          count={countByCat(c.key)}
-          last={i === CATEGORIES.length - 1}
-          onPress={() => router.push(`/list/category/${c.key}`)}
-        />
-      ))}
+      {/* Watch — video categories kept separate from music/books/games. */}
+      <SectionHeader title="Watch" />
+      {WATCH.map((k, i) => catRow(k, i === WATCH.length - 1))}
+
+      <SectionHeader title="Listen · Read · Play" />
+      {OTHER.map((k, i) => catRow(k, i === OTHER.length - 1))}
 
       <SectionHeader title="My lists" />
       <ListRow
@@ -39,18 +51,9 @@ export default function LibraryScreen() {
         iconColor={colors.danger}
         label="Favorites"
         count={favCount}
+        last
         onPress={() => router.push('/list/favorites')}
       />
-      {STATUSES.map((s, i) => (
-        <ListRow
-          key={s.key}
-          icon={STATUS_ICON[s.key]}
-          label={s.label}
-          count={countByStatus(s.key)}
-          last={i === STATUSES.length - 1}
-          onPress={() => router.push(`/list/status/${s.key}`)}
-        />
-      ))}
 
       <SectionHeader title="Custom Collections" />
       {(collections.data ?? []).slice(0, 5).map((c) => (

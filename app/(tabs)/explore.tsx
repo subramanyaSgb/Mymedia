@@ -14,7 +14,7 @@ import { colors, radius, space } from '@/constants/theme';
 import { addItem, deleteBySource, q } from '@/db/queries';
 import type { Category, Item, Status } from '@/db/schema';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
@@ -32,6 +32,16 @@ async function runSearch(tab: Category, query: string): Promise<SearchResult[]> 
   if (tab === 'game') return searchGames(query);
   return searchTmdb(tab as 'movie' | 'series', query);
 }
+
+const readMeta = (item: { metadata?: string | null }) => {
+  try {
+    return JSON.parse(item.metadata ?? '{}');
+  } catch {
+    return {};
+  }
+};
+const songAlbumId = (item: { metadata?: string | null }): string | null => readMeta(item).albumId ?? null;
+const songAlbumName = (item: { metadata?: string | null }): string | null => readMeta(item).albumName ?? null;
 
 export default function ExploreScreen() {
   const params = useLocalSearchParams<{ category?: Category }>();
@@ -230,6 +240,13 @@ export default function ExploreScreen() {
                   {item.metadata ? (() => {
                     try {
                       const meta = JSON.parse(item.metadata);
+                      if (item.category === 'song' && meta.artist) {
+                        return (
+                          <Text variant="micro" color={colors.textMuted} numberOfLines={1}>
+                            {meta.artist}
+                          </Text>
+                        );
+                      }
                       return meta.genres?.length > 0 ? (
                         <View style={styles.genresRow}>
                           {meta.genres.slice(0, 2).map((g: string, idx: number) => (
@@ -241,6 +258,21 @@ export default function ExploreScreen() {
                       return null;
                     }
                   })() : null}
+                  {item.category === 'song' && songAlbumId(item) ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="View album"
+                      onPress={() =>
+                        router.push({ pathname: '/album/[albumId]', params: { albumId: songAlbumId(item)! } })
+                      }
+                      hitSlop={6}
+                      style={styles.albumLink}>
+                      <Icon name="albums-outline" size={12} color={colors.accent} />
+                      <Text variant="micro" color={colors.accent} numberOfLines={1}>
+                        {songAlbumName(item) ?? 'View album'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
                 <Pressable
                   accessibilityRole="button"
@@ -265,6 +297,7 @@ export default function ExploreScreen() {
       <StatusPicker
         visible={pending != null}
         title={pending?.title ?? ''}
+        category={pending?.category}
         subtitle="Add to which list?"
         onSelect={(s) => pending && doAdd(pending, s)}
         onClose={() => setPending(null)}
@@ -297,6 +330,7 @@ const styles = StyleSheet.create({
   rowTitle: { width: '100%' },
   metaLine: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
   genresRow: { flexDirection: 'row', gap: space.xs, marginTop: space.xs, flexWrap: 'wrap' },
+  albumLink: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: space.xs },
   addBtn: {
     width: 44,
     height: 44,

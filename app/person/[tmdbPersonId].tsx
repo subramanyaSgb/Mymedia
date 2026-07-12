@@ -270,6 +270,7 @@ export default function PersonScreen() {
       <StatusPicker
         visible={pending != null}
         title={pending?.film.title ?? ''}
+        category={pending?.film.mediaType === 'movie' ? 'movie' : 'series'}
         subtitle={pending?.existingId ? 'Update status' : 'Add to which list?'}
         onSelect={onPickStatus}
         onClose={() => setPending(null)}

@@ -1,14 +1,16 @@
 import { haptic, Icon, Text } from '@/components/ui';
-import { STATUS_ICON, STATUS_LABEL, STATUSES } from '@/constants/categories';
+import { STATUS_ICON, statuses } from '@/constants/categories';
 import { colors, radius, space } from '@/constants/theme';
-import type { Status } from '@/db/schema';
+import type { Category, Status } from '@/db/schema';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
 // Themed bottom sheet replacing the native 3-option Alert for picking a status.
+// Vocabulary + which states are offered come from the item's category.
 export function StatusPicker({
   visible,
   title,
   subtitle,
+  category = 'movie',
   current,
   onSelect,
   onClose,
@@ -16,10 +18,12 @@ export function StatusPicker({
   visible: boolean;
   title: string;
   subtitle?: string;
+  category?: Category;
   current?: Status | null; // highlights the item's current status when updating
   onSelect: (status: Status) => void;
   onClose: () => void;
 }) {
+  const options = statuses(category);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
@@ -33,7 +37,7 @@ export function StatusPicker({
             {subtitle.toUpperCase()}
           </Text>
         ) : null}
-        {STATUSES.map((s) => {
+        {options.map((s) => {
           const active = current === s.key;
           return (
             <Pressable
@@ -50,7 +54,7 @@ export function StatusPicker({
                 <Icon name={STATUS_ICON[s.key]} size={18} color={active ? colors.onAccent : colors.accent} />
               </View>
               <Text variant="bodyStrong" style={{ flex: 1 }}>
-                {STATUS_LABEL[s.key]}
+                {s.label}
               </Text>
               {active ? <Icon name="checkmark" size={18} color={colors.accent} /> : null}
             </Pressable>

@@ -1,8 +1,10 @@
 import { Icon, Poster } from '@/components/ui';
 import { Text } from '@/components/ui/Text';
+import { useProviderLogo } from '@/components/useProviderLogo';
 import { CATEGORY_ICON } from '@/constants/categories';
 import { colors, radius, space } from '@/constants/theme';
 import { parseProgress, type Item } from '@/db/queries';
+import { Image } from 'expo-image';
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -14,6 +16,7 @@ export function MediaCard({
   width = 120,
   selectionMode = false,
   selected = false,
+  showProvider = false,
   onPress,
   onLongPress,
 }: {
@@ -21,12 +24,14 @@ export function MediaCard({
   width?: number;
   selectionMode?: boolean;
   selected?: boolean;
+  showProvider?: boolean; // overlay the streaming-provider logo (video items only)
   onPress?: () => void;
   onLongPress?: () => void;
 }) {
   const progress = parseProgress(item.progress);
   const pct = progress.percent ?? (item.status === 'finished' ? 100 : 0);
   const showBar = item.status === 'watching' && pct > 0; // no misleading sliver at 0%
+  const providerLogo = useProviderLogo(showProvider ? item : { category: 'song', source: 'manual', sourceId: null });
 
   const content = (
     <>
@@ -45,6 +50,9 @@ export function MediaCard({
               {selected ? <Icon name="checkmark" size={14} color={colors.onAccent} /> : null}
             </View>
           </>
+        ) : null}
+        {showProvider && providerLogo && !selectionMode ? (
+          <Image source={{ uri: providerLogo }} style={styles.providerBadge} contentFit="cover" />
         ) : null}
       </View>
       {/* Numeric width on the text itself — percentage widths are unreliable inside
@@ -129,4 +137,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   selectCircleOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+  providerBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.5)',
+  },
 });

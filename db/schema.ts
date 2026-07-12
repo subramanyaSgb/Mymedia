@@ -42,6 +42,8 @@ export type Metadata = {
   episodes?: number;
   director?: string;
   artist?: string; // songs
+  albumId?: string; // song's album/soundtrack — "itunes-<collectionId>" | "deezer-<albumId>"
+  albumName?: string;
   creator?: string; // books/games — author/studio
   overview?: string;
   genres?: string[];

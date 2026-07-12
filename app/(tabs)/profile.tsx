@@ -91,6 +91,11 @@ export default function ProfileScreen() {
   const maxRatingCount = Math.max(...ratings.map((r) => r.count), 1);
   const languagesNamed = languages.map((l) => ({ ...l, genre: languageName(l.genre) ?? l.genre }));
 
+  // Category-aware overview labels. "Hours" only meaningful where runtime is tracked.
+  const doneLabel =
+    tab === 'song' ? 'Saved' : tab === 'book' ? 'Read' : tab === 'game' ? 'Played' : 'Watched';
+  const showHours = tab !== 'song' && tab !== 'book';
+
   return (
     <Screen>
       {/* Header card */}
@@ -116,18 +121,18 @@ export default function ProfileScreen() {
         ))}
       </ScrollView>
 
-      {/* Overview — 2×2 icon stat cards */}
+      {/* Overview — 2×2 icon stat cards, category-aware labels */}
       <SectionHeader title="Overview" />
       <View style={styles.statGrid}>
         <StatCard icon="albums-outline" label="Total" value={stats?.totalItems ?? 0} />
-        <StatCard icon="checkmark-done-outline" label="Watched" value={stats?.itemsWatched ?? 0} />
-        <StatCard icon="time-outline" label="Hours" value={stats?.hoursLogged ?? 0} />
+        <StatCard icon="checkmark-done-outline" label={doneLabel} value={stats?.itemsWatched ?? 0} />
+        {showHours ? <StatCard icon="time-outline" label="Hours" value={stats?.hoursLogged ?? 0} /> : null}
         <StatCard icon="pie-chart-outline" label="Completed" value={`${completion}%`} />
       </View>
 
       {watchHistory.length > 0 && (
         <>
-          <SectionHeader title="Watch Activity" />
+          <SectionHeader title="Activity" />
           <WatchHistoryChart data={watchHistory} />
         </>
       )}
