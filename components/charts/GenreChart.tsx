@@ -1,5 +1,4 @@
 import { View, StyleSheet, Dimensions, ScrollView } from 'react-native';
-import { BarChart } from 'react-native-svg-charts';
 import { colors, space } from '@/constants/theme';
 import { Text } from '../ui/Text';
 
@@ -19,6 +18,7 @@ export function GenreChart({ data }: GenreChartProps) {
   const topGenres = data.slice(0, 10);
   const chartData = topGenres.map((d) => d.count);
   const maxValue = Math.max(...chartData, 1);
+  const barHeight = 200 / topGenres.length;
 
   return (
     <View style={styles.container}>
@@ -26,28 +26,27 @@ export function GenreChart({ data }: GenreChartProps) {
         Top Genres
       </Text>
       <View style={styles.chartWrapper}>
-        <BarChart
-          style={styles.chart}
-          data={chartData}
-          svg={{
-            fill: colors.accent,
-          }}
-          contentInset={{ top: 10, bottom: 10, left: 40, right: 10 }}
-          yMin={0}
-          yMax={maxValue}
-          horizontal={true}
-        />
-      </View>
-      <ScrollView style={styles.legend} horizontal showsHorizontalScrollIndicator={false}>
-        {topGenres.map((g, i) => (
-          <View key={i} style={styles.legendItem}>
-            <View style={[styles.legendColor, { backgroundColor: colors.accent }]} />
-            <Text variant="micro" numberOfLines={1}>
-              {g.genre} ({g.count})
+        {topGenres.map((genre, idx) => (
+          <View key={idx} style={[styles.barRow, { height: barHeight }]}>
+            <Text variant="micro" style={styles.label} numberOfLines={1}>
+              {genre.genre}
             </Text>
+            <View style={styles.barContainer}>
+              <View
+                style={[
+                  styles.bar,
+                  {
+                    width: `${(genre.count / maxValue) * 90}%`,
+                  },
+                ]}
+              />
+              <Text variant="micro" color={colors.textMuted}>
+                {genre.count}
+              </Text>
+            </View>
           </View>
         ))}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -55,10 +54,10 @@ export function GenreChart({ data }: GenreChartProps) {
 const styles = StyleSheet.create({
   container: { marginVertical: space.lg },
   title: { marginBottom: space.md },
-  chartWrapper: { height: 200, width: Dimensions.get('window').width - 32 },
-  chart: { height: '100%', width: '100%' },
+  chartWrapper: { width: Dimensions.get('window').width - 32 },
+  barRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: space.xs, borderBottomWidth: 1, borderBottomColor: colors.border },
+  label: { width: 80 },
+  barContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', marginLeft: space.md, gap: space.sm },
+  bar: { height: 20, backgroundColor: colors.accent, borderRadius: 4 },
   empty: { height: 200, justifyContent: 'center', alignItems: 'center' },
-  legend: { marginTop: space.md, paddingHorizontal: 0 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', marginRight: space.lg, paddingVertical: space.sm },
-  legendColor: { width: 12, height: 12, borderRadius: 2, marginRight: space.xs },
 });

@@ -12,6 +12,7 @@ import { FlatList, StyleSheet, View } from 'react-native';
 // Route: /list/favorites | /list/category/<cat> | /list/status/<status>
 function resolve(spec: string[]) {
   if (spec[0] === 'favorites') return { title: 'Favorites', query: q.favorites() };
+  if (spec[0] === 'all') return { title: 'All items', query: q.all() };
   if (spec[0] === 'category') {
     const cat = spec[1] as Category;
     return { title: CATEGORY_LABEL[cat] ?? 'Category', query: q.byCategory(cat) };

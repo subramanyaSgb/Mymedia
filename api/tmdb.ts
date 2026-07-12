@@ -22,7 +22,7 @@ const genreCache = new Map<Kind, Map<number, string>>();
 
 export const tmdbConfigured = () => CRED.length > 0;
 
-async function tmdb(path: string) {
+export async function tmdb(path: string) {
   const sep = path.includes('?') ? '&' : '?';
   const url = isJwt ? `${BASE}${path}` : `${BASE}${path}${sep}api_key=${CRED}`;
   const res = await fetchRetry(url, {
@@ -40,7 +40,7 @@ async function loadGenres(kind: Kind): Promise<Map<number, string>> {
   if (genreCache.has(kind)) return genreCache.get(kind)!;
   const endpoint = kind === 'movie' ? 'movie' : 'tv';
   const data = await tmdb(`/genre/${endpoint}/list`);
-  const map = new Map(data.genres.map((g: any) => [g.id, g.name]));
+  const map = new Map<number, string>(data.genres.map((g: any) => [g.id, g.name] as [number, string]));
   genreCache.set(kind, map);
   return map;
 }
@@ -114,4 +114,24 @@ export async function fetchPersonCredits(personId: string): Promise<any> {
 export async function fetchTrendingMovies(timeWindow: 'day' | 'week' = 'week'): Promise<any> {
   if (!CRED) throw new Error('TMDB credential not set');
   return tmdb(`/trending/movie/${timeWindow}`);
+}
+
+// Full movie details (runtime, genres, belongs_to_collection).
+export async function fetchMovieDetails(movieId: string): Promise<any> {
+  return tmdb(`/movie/${movieId}`);
+}
+
+// Full TV details (seasons, episodes, genres).
+export async function fetchTvDetails(tvId: string): Promise<any> {
+  return tmdb(`/tv/${tvId}`);
+}
+
+// A movie collection ("same series"): { name, parts: [...] }.
+export async function fetchCollection(collectionId: number): Promise<any> {
+  return tmdb(`/collection/${collectionId}`);
+}
+
+// Related shows for a TV series.
+export async function fetchTvRecommendations(tvId: string): Promise<any> {
+  return tmdb(`/tv/${tvId}/recommendations`);
 }

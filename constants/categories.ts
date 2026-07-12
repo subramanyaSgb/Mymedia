@@ -8,6 +8,7 @@ export const CATEGORIES: { key: Category; label: string; icon: IconName; api: bo
   { key: 'anime', label: 'Anime', icon: 'sparkles', api: true },
   { key: 'song', label: 'Songs', icon: 'musical-notes', api: false },
   { key: 'book', label: 'Books', icon: 'book-outline', api: false },
+  { key: 'game', label: 'Games', icon: 'game-controller-outline', api: false },
 ];
 
 export const CATEGORY_ICON: Record<Category, IconName> = {
@@ -16,6 +17,7 @@ export const CATEGORY_ICON: Record<Category, IconName> = {
   anime: 'sparkles',
   song: 'musical-notes',
   book: 'book-outline',
+  game: 'game-controller-outline',
 };
 
 export const CATEGORY_LABEL: Record<Category, string> = {
@@ -24,6 +26,7 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   anime: 'Anime',
   song: 'Song',
   book: 'Book',
+  game: 'Game',
 };
 
 export const STATUSES: { key: Status; label: string }[] = [

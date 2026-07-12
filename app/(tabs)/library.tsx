@@ -1,12 +1,13 @@
 import { ListRow, Screen, SectionHeader, Text } from '@/components/ui';
 import { CATEGORIES, STATUS_ICON, STATUSES } from '@/constants/categories';
 import { colors } from '@/constants/theme';
-import { q } from '@/db/queries';
+import { cq, q } from '@/db/queries';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { router } from 'expo-router';
 
 export default function LibraryScreen() {
   const all = useLiveQuery(q.all());
+  const collections = useLiveQuery(cq.all());
   const items = all.data;
 
   const countByCat = (key: string) => items.filter((i) => i.category === key).length;
@@ -50,6 +51,24 @@ export default function LibraryScreen() {
           onPress={() => router.push(`/list/status/${s.key}`)}
         />
       ))}
+
+      <SectionHeader title="Custom Collections" />
+      {(collections.data ?? []).slice(0, 5).map((c) => (
+        <ListRow
+          key={c.id}
+          icon="albums-outline"
+          label={c.name}
+          count={c.count}
+          onPress={() => router.push({ pathname: '/collection/[id]', params: { id: String(c.id) } })}
+        />
+      ))}
+      <ListRow
+        icon="add-circle-outline"
+        iconColor={colors.accent}
+        label={(collections.data ?? []).length > 0 ? 'All collections' : 'New collection'}
+        last
+        onPress={() => router.push('/collections')}
+      />
     </Screen>
   );
 }

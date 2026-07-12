@@ -14,7 +14,7 @@ export function Chip({
 }: {
   label: string;
   active?: boolean;
-  onPress: () => void;
+  onPress?: () => void; // omit for display-only chips (e.g. genre tags)
   activeIcon?: IconName;
 }) {
   return (
@@ -22,9 +22,10 @@ export function Chip({
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       accessibilityLabel={label}
+      disabled={!onPress}
       onPress={() => {
         haptic.light();
-        onPress();
+        onPress?.();
       }}
       style={({ pressed }) => [
         styles.chip,

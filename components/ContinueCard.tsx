@@ -38,7 +38,17 @@ export function ContinueCard({ item, width }: { item: Item; width: number }) {
             <Text variant="micro" color={colors.accent}>
               CONTINUE
             </Text>
+            {progress.percent ? (
+              <Text variant="micro" color={colors.textMuted}>
+                {Math.round(progress.percent)}%
+              </Text>
+            ) : null}
           </View>
+          {progress.percent ? (
+            <View style={styles.track}>
+              <View style={[styles.fill, { width: `${Math.min(100, progress.percent)}%` }]} />
+            </View>
+          ) : null}
         </View>
       </Pressable>
     </Link>
@@ -59,4 +69,6 @@ const styles = StyleSheet.create({
   info: { flex: 1, justifyContent: 'center' },
   line: { marginTop: 4 },
   playRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: space.md },
+  track: { height: 3, borderRadius: radius.pill, backgroundColor: colors.surfaceHi, marginTop: 6, overflow: 'hidden' },
+  fill: { height: 3, borderRadius: radius.pill, backgroundColor: colors.accent },
 });

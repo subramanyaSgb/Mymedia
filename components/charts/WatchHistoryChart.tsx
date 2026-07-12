@@ -1,5 +1,4 @@
 import { View, StyleSheet, Dimensions } from 'react-native';
-import { LineChart } from 'react-native-svg-charts';
 import { colors, space } from '@/constants/theme';
 import { Text } from '../ui/Text';
 
@@ -18,6 +17,9 @@ export function WatchHistoryChart({ data }: WatchHistoryChartProps) {
 
   const chartData = data.map((d) => d.count);
   const maxValue = Math.max(...chartData, 1);
+  const width = Dimensions.get('window').width - 32;
+  const height = 200;
+  const pointSpacing = width / (chartData.length - 1 || 1);
 
   return (
     <View style={styles.container}>
@@ -25,17 +27,18 @@ export function WatchHistoryChart({ data }: WatchHistoryChartProps) {
         Watch History
       </Text>
       <View style={styles.chartWrapper}>
-        <LineChart
-          style={styles.chart}
-          data={chartData}
-          svg={{
-            stroke: colors.accent,
-            strokeWidth: 2,
-          }}
-          contentInset={{ top: 10, bottom: 10, left: 0, right: 0 }}
-          yMin={0}
-          yMax={maxValue}
-        />
+        {chartData.map((value, idx) => (
+          <View
+            key={idx}
+            style={[
+              styles.bar,
+              {
+                height: (value / maxValue) * height,
+                marginLeft: idx === 0 ? 0 : (pointSpacing - 6),
+              },
+            ]}
+          />
+        ))}
       </View>
       <Text variant="micro" color={colors.textMuted} style={styles.subtitle}>
         Last 30 days
@@ -47,8 +50,8 @@ export function WatchHistoryChart({ data }: WatchHistoryChartProps) {
 const styles = StyleSheet.create({
   container: { marginVertical: space.lg },
   title: { marginBottom: space.md },
-  chartWrapper: { height: 200, width: Dimensions.get('window').width - 32, marginHorizontal: -space.lg },
-  chart: { height: '100%', width: '100%' },
+  chartWrapper: { height: 200, width: Dimensions.get('window').width - 32, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', paddingHorizontal: space.sm },
+  bar: { width: 6, backgroundColor: colors.accent, borderRadius: 3 },
   empty: { height: 200, justifyContent: 'center', alignItems: 'center' },
   subtitle: { marginTop: space.sm, textAlign: 'center' },
 });

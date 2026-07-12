@@ -1,5 +1,6 @@
 import { ensureRuntime } from '@/api/runtime';
 import { searchJikan } from '@/api/jikan';
+import { syncItemData } from '@/api/sync';
 import { searchTmdb, tmdbConfigured } from '@/api/tmdb';
 import type { SearchResult } from '@/api/types';
 import { Chip, EmptyState, haptic, Icon, Poster, Screen, Skeleton, Text } from '@/components/ui';
@@ -68,6 +69,7 @@ export default function ExploreScreen() {
     try {
       const id = await addItem({ ...r, status });
       haptic.success();
+      if (r.source === 'tmdb') syncItemData(id, r.sourceId, r.category);
       if (status === 'finished') ensureRuntime({ ...r, id, status } as unknown as Item);
     } catch {
       haptic.warning();
@@ -218,7 +220,7 @@ export default function ExploreScreen() {
                       return meta.genres?.length > 0 ? (
                         <View style={styles.genresRow}>
                           {meta.genres.slice(0, 2).map((g: string, idx: number) => (
-                            <Chip key={idx} label={g} size="small" />
+                            <Chip key={idx} label={g} />
                           ))}
                         </View>
                       ) : null;

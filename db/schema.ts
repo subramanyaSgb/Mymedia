@@ -5,7 +5,7 @@ import { integer, real, sqliteTable, text, unique } from 'drizzle-orm/sqlite-cor
 // are queries over this table, not separate tables. See plan for the metadata-as-JSON tradeoff.
 export const items = sqliteTable('items', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  category: text('category', { enum: ['movie', 'series', 'anime', 'song', 'book'] }).notNull(),
+  category: text('category', { enum: ['movie', 'series', 'anime', 'song', 'book', 'game'] }).notNull(),
   source: text('source', { enum: ['tmdb', 'jikan', 'manual'] }).notNull(),
   sourceId: text('source_id'), // external id; null for manual
   title: text('title').notNull(),
@@ -42,8 +42,11 @@ export type Metadata = {
   episodes?: number;
   director?: string;
   artist?: string; // songs
+  creator?: string; // books/games — author/studio
   overview?: string;
   genres?: string[];
+  collectionId?: number; // TMDB collection ("same series" for movies)
+  collectionName?: string;
 };
 
 // Cast members table
@@ -93,7 +96,7 @@ export const itemCredits = sqliteTable(
     itemId: integer('item_id')
       .notNull()
       .references(() => items.id, { onDelete: 'cascade' }),
-    creditType: text('credit_type', { enum: ['cast', 'director', 'writer'] }).notNull(),
+    creditType: text('credit_type', { enum: ['cast', 'crew'] }).notNull(),
     creditId: integer('credit_id').notNull(), // FK to cast.id or crew.id depending on creditType
     character: text('character'), // role name for cast
   }
@@ -138,3 +141,36 @@ export const itemSeries = sqliteTable(
 
 export type ItemSeries = typeof itemSeries.$inferSelect;
 export type NewItemSeries = typeof itemSeries.$inferInsert;
+
+// User-created collections ("Christopher Nolan", "90s Classics", …)
+export const collections = sqliteTable('collections', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+});
+
+export type Collection = typeof collections.$inferSelect;
+
+export const collectionItems = sqliteTable(
+  'collection_items',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    collectionId: integer('collection_id')
+      .notNull()
+      .references(() => collections.id, { onDelete: 'cascade' }),
+    itemId: integer('item_id')
+      .notNull()
+      .references(() => items.id, { onDelete: 'cascade' }),
+  },
+  (table) => ({
+    pairUnique: unique('collection_items_pair_unique').on(table.collectionId, table.itemId),
+  })
+);
+
+// Tiny key-value store (onboarding flag etc.)
+export const settings = sqliteTable('settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+});

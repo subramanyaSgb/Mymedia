@@ -5,16 +5,16 @@ import {
   cast,
   crew,
   itemCredits,
-  series,
   itemSeries,
+  collections,
+  collectionItems,
+  settings,
   type Category,
   type Item,
   type Metadata,
   type NewItem,
   type Progress,
   type Status,
-  type Cast,
-  type Crew,
 } from './schema';
 
 // --- JSON column helpers (the non-trivial logic worth testing) ---
@@ -93,6 +93,7 @@ export const q = {
         id: cast.id,
         name: cast.name,
         profileImage: cast.profileImage,
+        tmdbPersonId: cast.tmdbPersonId,
         character: itemCredits.character,
       })
       .from(cast)
@@ -104,9 +105,10 @@ export const q = {
         id: crew.id,
         name: crew.name,
         profileImage: crew.profileImage,
+        tmdbPersonId: crew.tmdbPersonId,
       })
       .from(crew)
-      .innerJoin(itemCredits, and(eq(itemCredits.creditId, crew.id), eq(itemCredits.creditType, role === 'director' ? 'director' : role === 'writer' ? 'writer' : 'director')))
+      .innerJoin(itemCredits, and(eq(itemCredits.creditId, crew.id), eq(itemCredits.creditType, 'crew')))
       .where(and(eq(itemCredits.itemId, itemId), eq(crew.role, role))),
   filmographyForPerson: (tmdbPersonId: number) =>
     db
@@ -156,8 +158,8 @@ export type Stats = {
 // runtime lives inside the metadata JSON; SQLite json_extract reads it directly.
 const runtimeExpr = sql<number>`COALESCE(json_extract(${items.metadata}, '$.runtime'), 0)`;
 
-export async function getStats(): Promise<Stats> {
-  const [row] = await db
+export async function getStats(category?: Category): Promise<Stats> {
+  const base = db
     .select({
       totalItems: sql<number>`COUNT(*)`,
       itemsWatched: sql<number>`SUM(CASE WHEN ${items.status} = 'finished' THEN 1 ELSE 0 END)`,
@@ -165,6 +167,7 @@ export async function getStats(): Promise<Stats> {
       daysTracked: sql<number>`COUNT(DISTINCT date(${items.addedAt} / 1000, 'unixepoch'))`,
     })
     .from(items);
+  const [row] = category ? await base.where(eq(items.category, category)) : await base;
 
   return {
     totalItems: row?.totalItems ?? 0,
@@ -179,7 +182,7 @@ export async function getCategoryCounts(): Promise<Record<Category, number>> {
     .select({ category: items.category, count: sql<number>`COUNT(*)` })
     .from(items)
     .groupBy(items.category);
-  const out: Record<Category, number> = { movie: 0, series: 0, anime: 0, song: 0, book: 0 };
+  const out: Record<Category, number> = { movie: 0, series: 0, anime: 0, song: 0, book: 0, game: 0 };
   for (const r of rows) out[r.category] = r.count;
   return out;
 }
@@ -239,6 +242,83 @@ export async function getRatingDistribution(): Promise<Array<{ rating: number; c
   return rows
     .map((r) => ({ rating: r.rating ?? 0, count: r.count }))
     .sort((a, b) => a.rating - b.rating);
+}
+
+// --- Custom collections ---
+
+export const cq = {
+  // All collections with item counts + up to 1 cover image.
+  all: () =>
+    db
+      .select({
+        id: collections.id,
+        name: collections.name,
+        count: sql<number>`(SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = ${collections.id})`,
+        cover: sql<string | null>`(
+          SELECT i.image_url FROM collection_items ci
+          JOIN items i ON i.id = ci.item_id
+          WHERE ci.collection_id = ${collections.id} AND i.image_url IS NOT NULL
+          ORDER BY ci.id LIMIT 1
+        )`,
+      })
+      .from(collections)
+      .orderBy(desc(collections.createdAt)),
+  items: (collectionId: number) =>
+    db
+      .select({ item: items })
+      .from(collectionItems)
+      .innerJoin(items, eq(collectionItems.itemId, items.id))
+      .where(eq(collectionItems.collectionId, collectionId)),
+  byId: (id: number) => db.select().from(collections).where(eq(collections.id, id)),
+  forItem: (itemId: number) =>
+    db
+      .select({ collectionId: collectionItems.collectionId })
+      .from(collectionItems)
+      .where(eq(collectionItems.itemId, itemId)),
+};
+
+export async function createCollection(name: string): Promise<number> {
+  const [row] = await db.insert(collections).values({ name }).returning({ id: collections.id });
+  return row.id;
+}
+
+export async function deleteCollection(id: number): Promise<void> {
+  await db.delete(collectionItems).where(eq(collectionItems.collectionId, id));
+  await db.delete(collections).where(eq(collections.id, id));
+}
+
+export async function addToCollection(collectionId: number, itemId: number): Promise<void> {
+  // insert or ignore — unique(collectionId,itemId) guards duplicates
+  await db.insert(collectionItems).values({ collectionId, itemId }).onConflictDoNothing();
+}
+
+export async function removeFromCollection(collectionId: number, itemId: number): Promise<void> {
+  await db
+    .delete(collectionItems)
+    .where(and(eq(collectionItems.collectionId, collectionId), eq(collectionItems.itemId, itemId)));
+}
+
+// --- Settings KV ---
+
+export async function getSetting(key: string): Promise<string | null> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, key));
+  return row?.value ?? null;
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  await db
+    .insert(settings)
+    .values({ key, value })
+    .onConflictDoUpdate({ target: settings.key, set: { value } });
+}
+
+// Whether an item already has synced credits (skip re-sync on detail open).
+export async function hasCredits(itemId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ n: sql<number>`COUNT(*)` })
+    .from(itemCredits)
+    .where(eq(itemCredits.itemId, itemId));
+  return (row?.n ?? 0) > 0;
 }
 
 export type { Item, Category, Status };

@@ -1,12 +1,20 @@
 import { ensureRuntime } from '@/api/runtime';
+import { syncItemData } from '@/api/sync';
+import { fetchCollection, fetchTvRecommendations, tmdbConfigured } from '@/api/tmdb';
 import { Button, Chip, haptic, Icon, SectionHeader, Text } from '@/components/ui';
 import { CATEGORY_ICON, CATEGORY_LABEL, STATUS_ICON, STATUSES } from '@/constants/categories';
 import { colors, radius, space } from '@/constants/theme';
 import {
+  addItem,
+  addToCollection,
+  cq,
+  createCollection,
   deleteItem,
+  hasCredits,
   parseMetadata,
   parseProgress,
   q,
+  removeFromCollection,
   setStatus,
   toggleFavorite,
   updateItem,
@@ -16,10 +24,11 @@ import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -33,6 +42,15 @@ export default function DetailScreen() {
   const { data, updatedAt } = useLiveQuery(q.byId(Number(id)));
   const item = data[0];
   const { width } = useWindowDimensions();
+  const [showCollections, setShowCollections] = useState(false);
+
+  // Backfill: older items (or items added before sync existed) get credits on first open.
+  useEffect(() => {
+    if (!item || item.source !== 'tmdb' || !item.sourceId) return;
+    hasCredits(item.id).then((has) => {
+      if (!has) syncItemData(item.id, item.sourceId, item.category);
+    });
+  }, [item?.id, item?.source, item?.sourceId]);
 
   if (!item) {
     const loaded = updatedAt != null;
@@ -118,9 +136,10 @@ export default function DetailScreen() {
                 {formatRuntime(meta.runtime)}
               </Text>
             ) : null}
-            {isEpisodic && meta.seasons && meta.episodes ? (
+            {isEpisodic && meta.seasons ? (
               <Text variant="caption" muted>
-                {meta.seasons} {meta.seasons === 1 ? 'season' : 'seasons'} · {meta.episodes} {meta.episodes === 1 ? 'episode' : 'episodes'}
+                {meta.seasons} {meta.seasons === 1 ? 'season' : 'seasons'}
+                {meta.episodes ? ` · ${meta.episodes} ep` : ''}
               </Text>
             ) : null}
             {meta.artist ? (
@@ -147,20 +166,8 @@ export default function DetailScreen() {
         </View>
       </View>
 
-      {/* Cast section */}
-      <CastSection itemId={item.id} />
-
-      {/* Director section */}
-      <CrewSection itemId={item.id} role="director" title="Director" />
-
-      {/* Writers section */}
-      <CrewSection itemId={item.id} role="writer" title="Writers" />
-
-      {/* From This Series section */}
-      {isEpisodic ? <SeriesSection itemId={item.id} /> : null}
-
       <View style={styles.body}>
-        {/* Status — one connected segmented control, not floating chips. */}
+        {/* Status — one connected segmented control. */}
         <View style={styles.segment}>
           {STATUSES.map((s, i) => {
             const active = item.status === s.key;
@@ -192,6 +199,14 @@ export default function DetailScreen() {
           })}
         </View>
 
+        <Button
+          label="Add to collection"
+          variant="ghost"
+          icon="albums-outline"
+          onPress={() => setShowCollections(true)}
+          style={styles.collectionBtn}
+        />
+
         {meta.overview ? (
           <>
             <SectionHeader title="Overview" />
@@ -211,7 +226,24 @@ export default function DetailScreen() {
             </View>
           </>
         ) : null}
+      </View>
 
+      {/* Cast — clickable, opens the person's profile + filmography. */}
+      <CastSection itemId={item.id} />
+
+      {/* Crew — director & writers, also clickable. */}
+      <CrewSection itemId={item.id} role="director" title="Director" />
+      <CrewSection itemId={item.id} role="writer" title="Writers" />
+
+      {/* Same series: movie collections from TMDB, recommendations for TV. */}
+      {item.category === 'movie' && meta.collectionId ? (
+        <CollectionRail collectionId={meta.collectionId} collectionName={meta.collectionName} currentSourceId={item.sourceId} />
+      ) : null}
+      {item.category === 'series' && item.source === 'tmdb' && item.sourceId ? (
+        <RecommendationsRail sourceId={item.sourceId} />
+      ) : null}
+
+      <View style={styles.body}>
         {isEpisodic ? (
           <>
             <SectionHeader title="Progress" />
@@ -264,9 +296,102 @@ export default function DetailScreen() {
           style={styles.delete}
         />
       </View>
+
+      <CollectionPickerModal
+        visible={showCollections}
+        itemId={item.id}
+        onClose={() => setShowCollections(false)}
+      />
     </ScrollView>
   );
 }
+
+// --- Collection picker (modal) ---
+
+function CollectionPickerModal({
+  visible,
+  itemId,
+  onClose,
+}: {
+  visible: boolean;
+  itemId: number;
+  onClose: () => void;
+}) {
+  const { data: all } = useLiveQuery(cq.all());
+  const { data: memberships } = useLiveQuery(cq.forItem(itemId));
+  const memberIds = new Set((memberships ?? []).map((m) => m.collectionId));
+  const [newName, setNewName] = useState('');
+
+  const create = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    const cid = await createCollection(name);
+    await addToCollection(cid, itemId);
+    setNewName('');
+    haptic.success();
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose} />
+      <View style={styles.modalSheet}>
+        <Text variant="h1" style={{ marginBottom: space.md }}>
+          Collections
+        </Text>
+        <ScrollView style={{ maxHeight: 300 }}>
+          {(all ?? []).map((c) => {
+            const isIn = memberIds.has(c.id);
+            return (
+              <Pressable
+                key={c.id}
+                accessibilityRole="button"
+                onPress={async () => {
+                  haptic.light();
+                  if (isIn) await removeFromCollection(c.id, itemId);
+                  else await addToCollection(c.id, itemId);
+                }}
+                style={styles.collectionRow}>
+                <Icon
+                  name={isIn ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={22}
+                  color={isIn ? colors.accent : colors.textFaint}
+                />
+                <Text variant="body" style={{ flex: 1 }}>
+                  {c.name}
+                </Text>
+                <Text variant="micro" color={colors.textMuted}>
+                  {c.count}
+                </Text>
+              </Pressable>
+            );
+          })}
+          {(all ?? []).length === 0 ? (
+            <Text variant="caption" muted style={{ paddingVertical: space.md }}>
+              No collections yet — create one below.
+            </Text>
+          ) : null}
+        </ScrollView>
+        <View style={styles.newCollectionRow}>
+          <TextInput
+            style={styles.newCollectionInput}
+            placeholder="New collection…"
+            placeholderTextColor={colors.textFaint}
+            value={newName}
+            onChangeText={setNewName}
+            onSubmitEditing={create}
+            returnKeyType="done"
+          />
+          <Pressable onPress={create} accessibilityLabel="Create collection" style={styles.newCollectionBtn}>
+            <Icon name="add" size={22} color={colors.onAccent} />
+          </Pressable>
+        </View>
+        <Button label="Done" onPress={onClose} style={{ marginTop: space.md }} />
+      </View>
+    </Modal>
+  );
+}
+
+// --- Sections ---
 
 function ProgressEditor({
   season,
@@ -324,7 +449,15 @@ function CastSection({ itemId }: { itemId: number }) {
       <SectionHeader title="Cast" />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.castScroll}>
         {data.map((member) => (
-          <View key={member.id} style={styles.castCard}>
+          <Pressable
+            key={member.id}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${member.name}`}
+            disabled={!member.tmdbPersonId}
+            onPress={() =>
+              router.push({ pathname: '/person/[tmdbPersonId]', params: { tmdbPersonId: String(member.tmdbPersonId) } })
+            }
+            style={({ pressed }) => [styles.castCard, pressed && { opacity: 0.8 }]}>
             {member.profileImage ? (
               <Image
                 source={{ uri: member.profileImage }}
@@ -345,7 +478,7 @@ function CastSection({ itemId }: { itemId: number }) {
                 {member.character}
               </Text>
             ) : null}
-          </View>
+          </Pressable>
         ))}
       </ScrollView>
     </View>
@@ -369,7 +502,15 @@ function CrewSection({
     <View style={styles.section}>
       <SectionHeader title={title} />
       {data.map((member) => (
-        <View key={member.id} style={styles.crewRow}>
+        <Pressable
+          key={member.id}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${member.name}`}
+          disabled={!member.tmdbPersonId}
+          onPress={() =>
+            router.push({ pathname: '/person/[tmdbPersonId]', params: { tmdbPersonId: String(member.tmdbPersonId) } })
+          }
+          style={({ pressed }) => [styles.crewRow, pressed && { opacity: 0.8 }]}>
           {member.profileImage ? (
             <Image source={{ uri: member.profileImage }} style={styles.crewImage} contentFit="cover" transition={250} />
           ) : (
@@ -377,57 +518,149 @@ function CrewSection({
               <Icon name="person" size={20} color={colors.textFaint} />
             </View>
           )}
-          <Text variant="body">{member.name}</Text>
-        </View>
+          <Text variant="body" style={{ flex: 1 }}>
+            {member.name}
+          </Text>
+          <Icon name="chevron-forward" size={16} color={colors.textFaint} />
+        </Pressable>
       ))}
     </View>
   );
 }
 
-function SeriesSection({ itemId }: { itemId: number }) {
-  const { data: seriesData } = useLiveQuery(q.seriesForItem(itemId));
-  const seriesId = seriesData?.[0]?.seriesId;
+// TMDB catalog entry (collection part / recommendation) rendered as a poster with add button.
+type CatalogEntry = {
+  id: number;
+  title: string;
+  poster: string | null;
+  year: number | null;
+  rating: number | null;
+  overview: string;
+};
 
-  if (!seriesId) return null;
+function CatalogRail({
+  title,
+  entries,
+  category,
+}: {
+  title: string;
+  entries: CatalogEntry[];
+  category: 'movie' | 'series';
+}) {
+  const inLib = useLiveQuery(q.sourceIds());
+  const libMap = new Map(inLib.data.map((r) => [`${r.source}-${r.sourceId}`, true]));
 
-  const { data } = useLiveQuery(q.seriesItems(seriesId));
+  if (entries.length === 0) return null;
 
-  if (!data || data.length === 0) return null;
+  const add = async (e: CatalogEntry) => {
+    haptic.success();
+    const newId = await addItem({
+      category,
+      source: 'tmdb',
+      sourceId: String(e.id),
+      title: e.title,
+      imageUrl: e.poster,
+      year: e.year,
+      catalogRating: e.rating,
+      metadata: JSON.stringify({ overview: e.overview }),
+      status: 'want',
+    });
+    syncItemData(newId, String(e.id), category);
+  };
 
   return (
     <View style={styles.section}>
-      <SectionHeader title="From This Series" />
+      <SectionHeader title={title} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.castScroll}>
-        {data.map((item) => (
-          <Pressable
-            key={item.id}
-            onPress={() => router.push({ pathname: '/item/[id]', params: { id: item.id } })}
-            style={styles.seriesCard}>
-            {item.imageUrl ? (
-              <Image
-                source={{ uri: item.imageUrl }}
-                style={styles.seriesImage}
-                contentFit="cover"
-                transition={250}
-              />
-            ) : (
-              <View style={[styles.seriesImage, styles.seriesImageFallback]}>
-                <Icon name={CATEGORY_ICON[item.category]} size={24} color={colors.textFaint} />
-              </View>
-            )}
-            <Text variant="caption" numberOfLines={2} style={styles.seriesTitle}>
-              {item.title}
-            </Text>
-            {item.seasonNumber ? (
-              <Text variant="micro" muted numberOfLines={1}>
-                S{item.seasonNumber}E{item.episodeNumber}
+        {entries.map((e) => {
+          const added = libMap.has(`tmdb-${e.id}`);
+          return (
+            <View key={e.id} style={styles.seriesCard}>
+              {e.poster ? (
+                <Image source={{ uri: e.poster }} style={styles.seriesImage} contentFit="cover" transition={250} />
+              ) : (
+                <View style={[styles.seriesImage, styles.seriesImageFallback]}>
+                  <Icon name={CATEGORY_ICON[category]} size={24} color={colors.textFaint} />
+                </View>
+              )}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={added ? `${e.title} is in your library` : `Add ${e.title}`}
+                disabled={added}
+                onPress={() => add(e)}
+                style={[styles.railAddBtn, added && styles.railAddBtnDone]}>
+                <Icon name={added ? 'checkmark' : 'add'} size={16} color={colors.onAccent} />
+              </Pressable>
+              <Text variant="caption" numberOfLines={2} style={styles.seriesTitle}>
+                {e.title}
               </Text>
-            ) : null}
-          </Pressable>
-        ))}
+              {e.year ? (
+                <Text variant="micro" muted numberOfLines={1}>
+                  {e.year}
+                </Text>
+              ) : null}
+            </View>
+          );
+        })}
       </ScrollView>
     </View>
   );
+}
+
+function CollectionRail({
+  collectionId,
+  collectionName,
+  currentSourceId,
+}: {
+  collectionId: number;
+  collectionName?: string;
+  currentSourceId: string | null;
+}) {
+  const [entries, setEntries] = useState<CatalogEntry[]>([]);
+
+  useEffect(() => {
+    if (!tmdbConfigured()) return;
+    fetchCollection(collectionId)
+      .then((data) => {
+        const parts = ((data.parts ?? []) as any[])
+          .filter((p) => String(p.id) !== currentSourceId)
+          .map((p): CatalogEntry => ({
+            id: p.id,
+            title: p.title,
+            poster: p.poster_path ? `https://image.tmdb.org/t/p/w342${p.poster_path}` : null,
+            year: p.release_date ? Number(p.release_date.slice(0, 4)) : null,
+            rating: p.vote_average ?? null,
+            overview: p.overview ?? '',
+          }));
+        setEntries(parts);
+      })
+      .catch(() => {});
+  }, [collectionId, currentSourceId]);
+
+  return <CatalogRail title={collectionName ? `From ${collectionName}` : 'From This Series'} entries={entries} category="movie" />;
+}
+
+function RecommendationsRail({ sourceId }: { sourceId: string }) {
+  const [entries, setEntries] = useState<CatalogEntry[]>([]);
+
+  useEffect(() => {
+    if (!tmdbConfigured()) return;
+    fetchTvRecommendations(sourceId)
+      .then((data) => {
+        const recs = ((data.results ?? []) as any[]).slice(0, 12).map((p): CatalogEntry => ({
+          id: p.id,
+          title: p.name,
+          poster: p.poster_path ? `https://image.tmdb.org/t/p/w342${p.poster_path}` : null,
+          year: p.first_air_date ? Number(p.first_air_date.slice(0, 4)) : null,
+          rating: p.vote_average ?? null,
+          overview: p.overview ?? '',
+        }));
+        setEntries(recs);
+      })
+      .catch(() => {});
+  }, [sourceId]);
+
+  return <CatalogRail title="More Like This" entries={entries} category="series" />;
 }
 
 function formatRuntime(minutes: number): string {
@@ -482,8 +715,10 @@ const styles = StyleSheet.create({
   segmentActive: { backgroundColor: colors.accent },
   segmentDivider: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border },
 
+  collectionBtn: { marginTop: space.md },
+
   overview: { lineHeight: 22 },
-  genresRow: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap', marginBottom: space.lg },
+  genresRow: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap', marginBottom: space.sm },
   starRow: { flexDirection: 'row', gap: space.md },
   notes: {
     backgroundColor: colors.surface,
@@ -521,8 +756,55 @@ const styles = StyleSheet.create({
   crewImage: { width: 44, height: 44, borderRadius: radius.sm },
   crewImageFallback: { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
 
-  seriesCard: { width: 100, gap: space.xs, alignItems: 'center' },
-  seriesImage: { width: 100, height: 140, borderRadius: radius.md },
+  seriesCard: { width: 110, gap: space.xs },
+  seriesImage: { width: 110, height: 156, borderRadius: radius.md },
   seriesImageFallback: { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  seriesTitle: { textAlign: 'center', fontWeight: '600' },
+  seriesTitle: { fontWeight: '600' },
+  railAddBtn: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  railAddBtnDone: { backgroundColor: colors.success },
+
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+  modalSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: space.lg,
+    paddingBottom: space.xxl,
+  },
+  collectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    paddingVertical: space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  newCollectionRow: { flexDirection: 'row', gap: space.sm, marginTop: space.md, alignItems: 'center' },
+  newCollectionInput: {
+    flex: 1,
+    backgroundColor: colors.surfaceHi,
+    borderRadius: radius.md,
+    paddingHorizontal: space.md,
+    paddingVertical: 10,
+    color: colors.text,
+    fontSize: 15,
+  },
+  newCollectionBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.md,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
