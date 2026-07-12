@@ -1,20 +1,17 @@
 import { ensureRuntime } from '@/api/runtime';
 import { syncItemData } from '@/api/sync';
 import { fetchCollection, fetchTvRecommendations, tmdbConfigured } from '@/api/tmdb';
+import { CollectionPicker } from '@/components/CollectionPicker';
 import { Button, Chip, haptic, Icon, SectionHeader, Text } from '@/components/ui';
 import { CATEGORY_ICON, CATEGORY_LABEL, STATUS_ICON, STATUSES } from '@/constants/categories';
 import { colors, radius, space } from '@/constants/theme';
 import {
   addItem,
-  addToCollection,
-  cq,
-  createCollection,
   deleteItem,
   hasCredits,
   parseMetadata,
   parseProgress,
   q,
-  removeFromCollection,
   setStatus,
   toggleFavorite,
   updateItem,
@@ -28,7 +25,6 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -297,97 +293,12 @@ export default function DetailScreen() {
         />
       </View>
 
-      <CollectionPickerModal
+      <CollectionPicker
         visible={showCollections}
-        itemId={item.id}
+        itemIds={[item.id]}
         onClose={() => setShowCollections(false)}
       />
     </ScrollView>
-  );
-}
-
-// --- Collection picker (modal) ---
-
-function CollectionPickerModal({
-  visible,
-  itemId,
-  onClose,
-}: {
-  visible: boolean;
-  itemId: number;
-  onClose: () => void;
-}) {
-  const { data: all } = useLiveQuery(cq.all());
-  const { data: memberships } = useLiveQuery(cq.forItem(itemId));
-  const memberIds = new Set((memberships ?? []).map((m) => m.collectionId));
-  const [newName, setNewName] = useState('');
-
-  const create = async () => {
-    const name = newName.trim();
-    if (!name) return;
-    const cid = await createCollection(name);
-    await addToCollection(cid, itemId);
-    setNewName('');
-    haptic.success();
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.modalBackdrop} onPress={onClose} />
-      <View style={styles.modalSheet}>
-        <Text variant="h1" style={{ marginBottom: space.md }}>
-          Collections
-        </Text>
-        <ScrollView style={{ maxHeight: 300 }}>
-          {(all ?? []).map((c) => {
-            const isIn = memberIds.has(c.id);
-            return (
-              <Pressable
-                key={c.id}
-                accessibilityRole="button"
-                onPress={async () => {
-                  haptic.light();
-                  if (isIn) await removeFromCollection(c.id, itemId);
-                  else await addToCollection(c.id, itemId);
-                }}
-                style={styles.collectionRow}>
-                <Icon
-                  name={isIn ? 'checkmark-circle' : 'ellipse-outline'}
-                  size={22}
-                  color={isIn ? colors.accent : colors.textFaint}
-                />
-                <Text variant="body" style={{ flex: 1 }}>
-                  {c.name}
-                </Text>
-                <Text variant="micro" color={colors.textMuted}>
-                  {c.count}
-                </Text>
-              </Pressable>
-            );
-          })}
-          {(all ?? []).length === 0 ? (
-            <Text variant="caption" muted style={{ paddingVertical: space.md }}>
-              No collections yet — create one below.
-            </Text>
-          ) : null}
-        </ScrollView>
-        <View style={styles.newCollectionRow}>
-          <TextInput
-            style={styles.newCollectionInput}
-            placeholder="New collection…"
-            placeholderTextColor={colors.textFaint}
-            value={newName}
-            onChangeText={setNewName}
-            onSubmitEditing={create}
-            returnKeyType="done"
-          />
-          <Pressable onPress={create} accessibilityLabel="Create collection" style={styles.newCollectionBtn}>
-            <Icon name="add" size={22} color={colors.onAccent} />
-          </Pressable>
-        </View>
-        <Button label="Done" onPress={onClose} style={{ marginTop: space.md }} />
-      </View>
-    </Modal>
   );
 }
 
@@ -470,7 +381,7 @@ function CastSection({ itemId }: { itemId: number }) {
                 <Icon name="person" size={28} color={colors.textFaint} />
               </View>
             )}
-            <Text variant="caption" numberOfLines={1} style={styles.castName}>
+            <Text variant="caption" numberOfLines={2} style={styles.castName}>
               {member.name}
             </Text>
             {member.character ? (
@@ -755,7 +666,7 @@ const styles = StyleSheet.create({
   castCard: { width: 100, gap: space.xs, alignItems: 'center' },
   castImage: { width: 100, height: 140, borderRadius: radius.md },
   castImageFallback: { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  castName: { textAlign: 'center', fontWeight: '600' },
+  castName: { textAlign: 'center', fontWeight: '600', width: '100%' },
 
   crewRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm },
   crewImage: { width: 44, height: 44, borderRadius: radius.sm },
@@ -777,39 +688,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   railAddBtnDone: { backgroundColor: colors.success },
-
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
-  modalSheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    padding: space.lg,
-    paddingBottom: space.xxl,
-  },
-  collectionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    paddingVertical: space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  newCollectionRow: { flexDirection: 'row', gap: space.sm, marginTop: space.md, alignItems: 'center' },
-  newCollectionInput: {
-    flex: 1,
-    backgroundColor: colors.surfaceHi,
-    borderRadius: radius.md,
-    paddingHorizontal: space.md,
-    paddingVertical: 10,
-    color: colors.text,
-    fontSize: 15,
-  },
-  newCollectionBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: radius.md,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });

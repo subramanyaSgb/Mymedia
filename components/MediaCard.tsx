@@ -47,9 +47,10 @@ export function MediaCard({
           </>
         ) : null}
       </View>
-      {/* Fixed-height meta block so every card is identical → clean grid alignment. */}
+      {/* Fixed-height meta block so every card is identical → clean grid alignment.
+          Title wraps to 2 lines so longer names aren't clipped. */}
       <View style={styles.meta}>
-        <Text variant="caption" numberOfLines={1}>
+        <Text variant="caption" numberOfLines={2} ellipsizeMode="tail" style={styles.titleText}>
           {item.title}
         </Text>
         <Text variant="micro" color={colors.textMuted}>
@@ -93,7 +94,8 @@ export function MediaCard({
 
 const styles = StyleSheet.create({
   pressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
-  meta: { marginTop: space.sm, height: 34, justifyContent: 'flex-start' },
+  meta: { marginTop: space.sm, height: 54, justifyContent: 'flex-start' },
+  titleText: { width: '100%', lineHeight: 17 },
   track: { height: 3, borderRadius: radius.pill, backgroundColor: colors.surfaceHi, marginTop: 4, overflow: 'hidden' },
   fill: { height: 3, borderRadius: radius.pill, backgroundColor: colors.accent },
   selectedDim: {

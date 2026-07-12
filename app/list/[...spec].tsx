@@ -1,39 +1,50 @@
 import { ensureRuntime } from '@/api/runtime';
+import { CollectionPicker } from '@/components/CollectionPicker';
 import { MediaCard } from '@/components/MediaCard';
-import { EmptyState, haptic, Icon, Text } from '@/components/ui';
-import { CATEGORY_LABEL, STATUS_LABEL } from '@/constants/categories';
+import { Chip, EmptyState, haptic, Icon, Text } from '@/components/ui';
+import { CATEGORY_LABEL, STATUS_LABEL, STATUSES } from '@/constants/categories';
 import { colors, radius, space } from '@/constants/theme';
 import { deleteItem, q, setStatus, type Item } from '@/db/queries';
 import type { Category, Status } from '@/db/schema';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 // Route: /list/favorites | /list/all | /list/category/<cat> | /list/status/<status>
 function resolve(spec: string[]) {
-  if (spec[0] === 'favorites') return { title: 'Favorites', query: q.favorites() };
-  if (spec[0] === 'all') return { title: 'All items', query: q.all() };
+  if (spec[0] === 'favorites') return { title: 'Favorites', query: q.favorites(), statusChips: true };
+  if (spec[0] === 'all') return { title: 'All items', query: q.all(), statusChips: true };
   if (spec[0] === 'category') {
     const cat = spec[1] as Category;
-    return { title: CATEGORY_LABEL[cat] ?? 'Category', query: q.byCategory(cat) };
+    return { title: CATEGORY_LABEL[cat] ?? 'Category', query: q.byCategory(cat), statusChips: true };
   }
   if (spec[0] === 'status') {
     const st = spec[1] as Status;
-    return { title: STATUS_LABEL[st] ?? 'Status', query: q.byStatus(st) };
+    return { title: STATUS_LABEL[st] ?? 'Status', query: q.byStatus(st), statusChips: false };
   }
-  return { title: 'List', query: q.all() };
+  return { title: 'List', query: q.all(), statusChips: true };
 }
 
 const COLS = 3;
 
 export default function ListScreen() {
   const { spec } = useLocalSearchParams<{ spec: string[] }>();
-  const { title, query } = resolve(Array.isArray(spec) ? spec : [spec]);
-  const { data } = useLiveQuery(query);
+  const { title, query, statusChips } = resolve(Array.isArray(spec) ? spec : [spec]);
+  const { data: raw } = useLiveQuery(query);
+
+  // In-list search + status filter (client-side over the live rows).
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<Status | 'all'>('all');
+  const data = raw.filter(
+    (i) =>
+      (statusFilter === 'all' || i.status === statusFilter) &&
+      (search.trim() === '' || i.title.toLowerCase().includes(search.trim().toLowerCase()))
+  );
 
   // Multi-select: long-press enters selection mode, tap toggles, bar applies bulk actions.
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [showCollect, setShowCollect] = useState(false);
   const selectionMode = selected.size > 0;
 
   // Measure the list's real width (window width lies under Android edge-to-edge)
@@ -91,6 +102,39 @@ export default function ListScreen() {
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ title: selectionMode ? `${selected.size} selected` : title }} />
+
+      <View style={styles.header}>
+        <View style={styles.searchWrap}>
+          <Icon name="search" size={16} color={colors.textMuted} />
+          <TextInput
+            style={styles.search}
+            placeholder={`Search ${title.toLowerCase()}…`}
+            placeholderTextColor={colors.textFaint}
+            value={search}
+            onChangeText={setSearch}
+            autoCorrect={false}
+          />
+          {search.length > 0 ? (
+            <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityLabel="Clear search">
+              <Icon name="close-circle" size={16} color={colors.textFaint} />
+            </Pressable>
+          ) : null}
+        </View>
+        {statusChips ? (
+          <View style={styles.chips}>
+            <Chip label="All" active={statusFilter === 'all'} onPress={() => setStatusFilter('all')} />
+            {STATUSES.map((s) => (
+              <Chip
+                key={s.key}
+                label={s.key === 'want' ? 'Want' : s.key === 'watching' ? 'Watching' : 'Finished'}
+                active={statusFilter === s.key}
+                onPress={() => setStatusFilter(s.key)}
+              />
+            ))}
+          </View>
+        ) : null}
+      </View>
+
       <FlatList
         onLayout={(e) => setListW(e.nativeEvent.layout.width)}
         data={listW > 0 ? padded : []}
@@ -98,7 +142,7 @@ export default function ListScreen() {
         keyExtractor={(i: Item | null, idx) => (i ? String(i.id) : `spacer-${idx}`)}
         numColumns={COLS}
         columnWrapperStyle={{ gap }}
-        contentContainerStyle={{ padding: pad, rowGap: space.xl, paddingBottom: selectionMode ? 140 : pad }}
+        contentContainerStyle={{ padding: pad, paddingTop: space.sm, rowGap: space.xl, paddingBottom: selectionMode ? 150 : pad }}
         renderItem={({ item }) =>
           item ? (
             <MediaCard
@@ -114,7 +158,16 @@ export default function ListScreen() {
           )
         }
         ListEmptyComponent={
-          listW > 0 ? <EmptyState title="Nothing here yet" subtitle="Items you add will show up here." /> : null
+          listW > 0 ? (
+            <EmptyState
+              title={search || statusFilter !== 'all' ? 'No matches' : 'Nothing here yet'}
+              subtitle={
+                search || statusFilter !== 'all'
+                  ? 'Try a different search or filter.'
+                  : 'Items you add will show up here.'
+              }
+            />
+          ) : null
         }
       />
 
@@ -136,10 +189,20 @@ export default function ListScreen() {
             <ActionBtn icon="bookmark-outline" label="Want" onPress={() => applyStatus('want')} />
             <ActionBtn icon="play-circle-outline" label="Watching" onPress={() => applyStatus('watching')} />
             <ActionBtn icon="checkmark-done-outline" label="Finished" onPress={() => applyStatus('finished')} />
+            <ActionBtn icon="albums-outline" label="Collect" onPress={() => setShowCollect(true)} />
             <ActionBtn icon="trash-outline" label="Delete" danger onPress={bulkDelete} />
           </View>
         </View>
       ) : null}
+
+      <CollectionPicker
+        visible={showCollect}
+        itemIds={[...selected]}
+        onClose={() => {
+          setShowCollect(false);
+          clear();
+        }}
+      />
     </View>
   );
 }
@@ -171,6 +234,19 @@ function ActionBtn({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  header: { paddingHorizontal: space.lg, paddingTop: space.md, gap: space.md },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: space.md,
+  },
+  search: { flex: 1, color: colors.text, fontSize: 14, paddingVertical: 9 },
+  chips: { flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' },
   actionBar: {
     position: 'absolute',
     left: space.md,
