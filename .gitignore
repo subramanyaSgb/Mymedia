@@ -42,3 +42,4 @@ yarn-error.*
 /android
 *.apk
 .claude/scheduled_tasks.lock
+.git-commit-msg.txt
