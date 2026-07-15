@@ -1,12 +1,19 @@
 import { ContinueCard } from '@/components/ContinueCard';
 import { MediaCard } from '@/components/MediaCard';
-import { EmptyState, Screen, SectionHeader, Stat, StatRow, Text } from '@/components/ui';
-import { colors, space } from '@/constants/theme';
+import { Chip, EmptyState, Icon, Screen, SectionHeader, Stat, StatRow, Text, useColors, useThemedStyles } from '@/components/ui';
+import { CATEGORIES } from '@/constants/categories';
+import { radius, space, type Palette } from '@/constants/theme';
 import { getStats, q, type Stats } from '@/db/queries';
+import type { Category } from '@/db/schema';
+import { TrendingHorizontalScroll, fetchTrendingGridData } from '@/app/trending';
+import { OttHorizontalScroll, type OttEntry } from '@/app/ott';
+import { getForYouFeed } from '@/app/foryou';
+import { discoverOttReleases } from '@/api/tmdb';
+import { router } from 'expo-router';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
-import { useFocusEffect } from 'expo-router';
+import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View, ActivityIndicator } from 'react-native';
 
 function greeting() {
   const h = new Date().getHours();
@@ -16,21 +23,80 @@ function greeting() {
   return 'Good evening';
 }
 
+function SeeAll({ href }: { href: string }) {
+  const c = useColors();
+  return (
+    <Link href={href as any} asChild>
+      <Pressable hitSlop={8} accessibilityRole="link" accessibilityLabel="See all">
+        <Text variant="micro" color={c.accent}>
+          SEE ALL
+        </Text>
+      </Pressable>
+    </Link>
+  );
+}
+
 export default function HomeScreen() {
+  const c = useColors();
+  const styles = useThemedStyles(makeStyles);
   const watching = useLiveQuery(q.continueWatching());
   const recent = useLiveQuery(q.recentlyAdded(12));
   const [stats, setStats] = useState<Stats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [trending, setTrending] = useState<any[]>([]);
+  const [trendingLoading, setTrendingLoading] = useState(false);
+  const [ott, setOtt] = useState<OttEntry[]>([]);
+  const [hasNews, setHasNews] = useState(false);
+  const [filter, setFilter] = useState<Category | 'all'>('all');
   const { width } = useWindowDimensions();
 
   const loadStats = useCallback(() => getStats().then(setStats), []);
-  useFocusEffect(useCallback(() => void loadStats(), [loadStats]));
+
+  const loadTrending = useCallback(async () => {
+    try {
+      setTrendingLoading(true);
+      const data = await fetchTrendingGridData();
+      setTrending(data);
+    } catch (e) {
+      console.error('Error loading trending:', e);
+    } finally {
+      setTrendingLoading(false);
+    }
+  }, []);
+
+  const loadOtt = useCallback(async () => {
+    try {
+      setOtt((await discoverOttReleases()) as OttEntry[]);
+    } catch {}
+  }, []);
+
+  const loadNews = useCallback(async () => {
+    try {
+      setHasNews((await getForYouFeed()).length > 0);
+    } catch {}
+  }, []);
+
+  useFocusEffect(useCallback(() => {
+    void loadStats();
+    void loadTrending();
+    void loadOtt();
+    void loadNews();
+  }, [loadStats, loadTrending, loadOtt, loadNews]));
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadStats();
+    await Promise.all([loadStats(), loadTrending(), loadOtt()]);
     setRefreshing(false);
-  }, [loadStats]);
+  }, [loadStats, loadTrending, loadOtt]);
+
+  const byFilter = <T extends { category: Category }>(rows: T[]) =>
+    filter === 'all' ? rows : rows.filter((r) => r.category === filter);
+
+  const isVideo = (c: Category) => c === 'movie' || c === 'series' || c === 'anime';
+
+  // Continue watching = only video categories in progress (songs/books/games don't belong here).
+  const watchingRows = byFilter(watching.data).filter((i) => isVideo(i.category));
+  const recentVideo = byFilter(recent.data).filter((i) => isVideo(i.category));
 
   const empty = recent.data.length === 0;
   const featuredW = Math.min(width - space.lg * 2 - 36, 320);
@@ -38,42 +104,91 @@ export default function HomeScreen() {
   return (
     <Screen
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} />
       }>
-      <Text variant="caption" color={colors.textFaint}>
-        {greeting()}
-      </Text>
-      <Text variant="display">Your library</Text>
+      <View style={styles.topRow}>
+        <View style={{ flex: 1 }}>
+          <Text variant="caption" color={c.textFaint}>
+            {greeting()}
+          </Text>
+          <Text variant="display">Your library</Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="What's new for you"
+          onPress={() => router.push('/foryou')}
+          style={styles.bell}>
+          <Icon name="notifications-outline" size={20} color={c.text} />
+          {hasNews ? <View style={styles.bellDot} /> : null}
+        </Pressable>
+        <View style={styles.avatar}>
+          <Icon name="person" size={20} color={c.accent} />
+        </View>
+      </View>
+
+      {/* Category filter chips — matches the mockup's pill row under the greeting. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+        <Chip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
+        {CATEGORIES.map((c) => (
+          <Chip key={c.key} label={c.label} active={filter === c.key} onPress={() => setFilter(c.key)} />
+        ))}
+      </ScrollView>
 
       {empty ? (
         <EmptyState
           icon="add-circle-outline"
           title="Nothing here yet"
-          subtitle="Search a title in Explore, or use + to add one manually."
+          subtitle="Search a title in Explore to start tracking."
         />
       ) : (
         <>
-          {watching.data.length > 0 ? (
+          {watchingRows.length > 0 ? (
             <>
-              <SectionHeader title="Continue watching" />
+              <SectionHeader title="Continue watching" right={<SeeAll href="/list/status/watching" />} />
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hrow}>
-                {watching.data.map((i) => (
+                {watchingRows.map((i) => (
                   <ContinueCard key={i.id} item={i} width={featuredW} />
                 ))}
               </ScrollView>
             </>
           ) : null}
 
-          <SectionHeader title="Recently added" />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hrow}>
-            {recent.data.map((i) => (
-              <MediaCard key={i.id} item={i} width={110} />
-            ))}
-          </ScrollView>
+          {recentVideo.length > 0 ? (
+            <>
+              <SectionHeader title="Recently added" right={<SeeAll href="/list/all" />} />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hrow}>
+                {recentVideo.map((i) => (
+                  <MediaCard key={i.id} item={i} width={110} showProvider />
+                ))}
+              </ScrollView>
+            </>
+          ) : null}
+
         </>
       )}
 
-      <SectionHeader title="Statistics" />
+      {ott.length > 0 ? (
+        <>
+          <SectionHeader title="New on OTT" right={<SeeAll href="/ott" />} />
+          <OttHorizontalScroll items={ott} cardWidth={110} />
+        </>
+      ) : null}
+
+      {trendingLoading ? (
+        <>
+          <SectionHeader title="Trending Now" />
+          <View style={styles.trendingLoader}>
+            <ActivityIndicator color={c.accent} />
+          </View>
+        </>
+      ) : trending.length > 0 ? (
+        <>
+          <SectionHeader title="Trending Now" right={<SeeAll href="/trending" />} />
+          <TrendingHorizontalScroll items={trending} cardWidth={110} />
+        </>
+      ) : null}
+
+      <SectionHeader title="Your statistics" />
       <StatRow>
         <Stat label="Days" value={stats?.daysTracked ?? 0} />
         <Stat label="Watched" value={stats?.itemsWatched ?? 0} />
@@ -85,7 +200,40 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: Palette) =>
+  StyleSheet.create({
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  bell: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellDot: {
+    position: 'absolute',
+    top: 8,
+    right: 9,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: c.accent,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: c.accentDim,
+    borderWidth: 1,
+    borderColor: c.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chips: { flexDirection: 'row', gap: space.sm, marginTop: space.md, paddingRight: space.lg },
   hrow: { gap: space.md, paddingRight: space.lg },
   footer: { height: space.xl },
+  trendingLoader: { paddingVertical: space.lg, justifyContent: 'center', alignItems: 'center', height: 160 },
 });

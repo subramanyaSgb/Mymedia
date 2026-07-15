@@ -1,11 +1,11 @@
-import { colors, radius, space } from '@/constants/theme';
+import { radius, space } from '@/constants/theme';
 import { Pressable, StyleSheet } from 'react-native';
 import { haptic } from './feedback';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
+import { useColors } from './theme-context';
 
-// Selectable pill — shared by explore tabs and detail status control.
-// Active state uses BOTH color and an icon so it's not color-only (a11y).
+// Poptime pill chip — red when active. Active state uses BOTH color and icon (a11y).
 export function Chip({
   label,
   active,
@@ -14,25 +14,29 @@ export function Chip({
 }: {
   label: string;
   active?: boolean;
-  onPress: () => void;
+  onPress?: () => void; // omit for display-only chips (e.g. genre tags)
   activeIcon?: IconName;
 }) {
+  const c = useColors();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       accessibilityLabel={label}
+      disabled={!onPress}
       onPress={() => {
         haptic.light();
-        onPress();
+        onPress?.();
       }}
       style={({ pressed }) => [
         styles.chip,
-        active ? styles.active : styles.inactive,
+        active
+          ? { backgroundColor: c.accent, borderColor: c.accent }
+          : { backgroundColor: c.surface, borderColor: c.surface },
         pressed && { opacity: 0.85 },
       ]}>
-      {active ? <Icon name={activeIcon} size={14} color={colors.onAccent} /> : null}
-      <Text variant="caption" color={active ? colors.onAccent : colors.textMuted}>
+      {active ? <Icon name={activeIcon} size={14} color={c.onAccent} /> : null}
+      <Text variant="caption" color={active ? c.onAccent : c.textMuted}>
         {label}
       </Text>
     </Pressable>
@@ -45,10 +49,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.xs,
     paddingVertical: space.sm,
-    paddingHorizontal: space.md,
+    paddingHorizontal: space.md + 2,
     borderRadius: radius.pill,
     borderWidth: 1,
   },
-  active: { backgroundColor: colors.accent, borderColor: colors.accent },
-  inactive: { backgroundColor: colors.surface, borderColor: colors.border },
 });

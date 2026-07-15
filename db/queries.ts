@@ -2,6 +2,13 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from './client';
 import {
   items,
+  cast,
+  crew,
+  itemCredits,
+  itemSeries,
+  collections,
+  collectionItems,
+  settings,
   type Category,
   type Item,
   type Metadata,
@@ -68,8 +75,9 @@ export async function deleteBySource(source: string, sourceId: string): Promise<
 export const q = {
   byId: (id: number) => db.select().from(items).where(eq(items.id, id)),
   all: () => db.select().from(items).orderBy(desc(items.updatedAt)),
-  // Just the source ids in the library — used to mark search results as already added.
-  sourceIds: () => db.select({ source: items.source, sourceId: items.sourceId }).from(items),
+  // Source ids (+ local id) in the library — marks search results as added and maps back to items.
+  sourceIds: () =>
+    db.select({ id: items.id, source: items.source, sourceId: items.sourceId }).from(items),
   byCategory: (category: Category) =>
     db.select().from(items).where(eq(items.category, category)).orderBy(desc(items.updatedAt)),
   byStatus: (status: Status) =>
@@ -80,6 +88,63 @@ export const q = {
     db.select().from(items).orderBy(desc(items.addedAt)).limit(limit),
   continueWatching: () =>
     db.select().from(items).where(eq(items.status, 'watching')).orderBy(desc(items.updatedAt)),
+  castForItem: (itemId: number) =>
+    db
+      .select({
+        id: cast.id,
+        name: cast.name,
+        profileImage: cast.profileImage,
+        tmdbPersonId: cast.tmdbPersonId,
+        character: itemCredits.character,
+      })
+      .from(cast)
+      .innerJoin(itemCredits, and(eq(itemCredits.creditId, cast.id), eq(itemCredits.creditType, 'cast')))
+      .where(eq(itemCredits.itemId, itemId)),
+  crewForItem: (itemId: number, role: 'director' | 'writer' | 'producer' | 'cinematographer' | 'composer') =>
+    db
+      .select({
+        id: crew.id,
+        name: crew.name,
+        profileImage: crew.profileImage,
+        tmdbPersonId: crew.tmdbPersonId,
+      })
+      .from(crew)
+      .innerJoin(itemCredits, and(eq(itemCredits.creditId, crew.id), eq(itemCredits.creditType, 'crew')))
+      .where(and(eq(itemCredits.itemId, itemId), eq(crew.role, role))),
+  filmographyForPerson: (tmdbPersonId: number) =>
+    db
+      .select({
+        itemId: items.id,
+        title: items.title,
+        imageUrl: items.imageUrl,
+        category: items.category,
+        year: items.year,
+      })
+      .from(items)
+      .innerJoin(itemCredits, eq(itemCredits.itemId, items.id))
+      .innerJoin(cast, and(eq(cast.id, itemCredits.creditId), eq(itemCredits.creditType, 'cast'), eq(cast.tmdbPersonId, tmdbPersonId)))
+      .orderBy(desc(items.year)),
+  seriesItems: (seriesId: number) =>
+    db
+      .select({
+        id: items.id,
+        title: items.title,
+        imageUrl: items.imageUrl,
+        category: items.category,
+        year: items.year,
+        seasonNumber: itemSeries.seasonNumber,
+        episodeNumber: itemSeries.episodeNumber,
+      })
+      .from(itemSeries)
+      .innerJoin(items, eq(itemSeries.itemId, items.id))
+      .where(eq(itemSeries.seriesId, seriesId))
+      .orderBy(itemSeries.seasonNumber, itemSeries.episodeNumber),
+  seriesForItem: (itemId: number) =>
+    db
+      .select({ seriesId: itemSeries.seriesId })
+      .from(itemSeries)
+      .where(eq(itemSeries.itemId, itemId))
+      .limit(1),
 };
 
 // --- Stats (computed on read, no stats table) ---
@@ -94,8 +159,8 @@ export type Stats = {
 // runtime lives inside the metadata JSON; SQLite json_extract reads it directly.
 const runtimeExpr = sql<number>`COALESCE(json_extract(${items.metadata}, '$.runtime'), 0)`;
 
-export async function getStats(): Promise<Stats> {
-  const [row] = await db
+export async function getStats(category?: Category): Promise<Stats> {
+  const base = db
     .select({
       totalItems: sql<number>`COUNT(*)`,
       itemsWatched: sql<number>`SUM(CASE WHEN ${items.status} = 'finished' THEN 1 ELSE 0 END)`,
@@ -103,6 +168,7 @@ export async function getStats(): Promise<Stats> {
       daysTracked: sql<number>`COUNT(DISTINCT date(${items.addedAt} / 1000, 'unixepoch'))`,
     })
     .from(items);
+  const [row] = category ? await base.where(eq(items.category, category)) : await base;
 
   return {
     totalItems: row?.totalItems ?? 0,
@@ -117,9 +183,156 @@ export async function getCategoryCounts(): Promise<Record<Category, number>> {
     .select({ category: items.category, count: sql<number>`COUNT(*)` })
     .from(items)
     .groupBy(items.category);
-  const out: Record<Category, number> = { movie: 0, series: 0, anime: 0, song: 0 };
+  const out: Record<Category, number> = { movie: 0, series: 0, anime: 0, song: 0, book: 0, game: 0 };
   for (const r of rows) out[r.category] = r.count;
   return out;
+}
+
+// Series recommendations: get all items in same series
+export async function getSeriesItems(seriesId: number): Promise<Item[]> {
+  return db
+    .select({ item: items })
+    .from(itemSeries)
+    .innerJoin(items, eq(itemSeries.itemId, items.id))
+    .where(eq(itemSeries.seriesId, seriesId))
+    .then((rows) => rows.map((r) => r.item));
+}
+
+// Watch history by date (last 30 days)
+export async function getWatchHistoryByDate(): Promise<Array<{ date: string; count: number }>> {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).getTime();
+  const rows = await db
+    .select({
+      date: sql<string>`date(${items.addedAt} / 1000, 'unixepoch')`,
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(items)
+    .where(sql`${items.addedAt} > ${thirtyDaysAgo}`)
+    .groupBy(sql`date(${items.addedAt} / 1000, 'unixepoch')`)
+    .orderBy(sql`date(${items.addedAt} / 1000, 'unixepoch')`);
+  return rows;
+}
+
+// Genre stats: parse genres from metadata
+export async function getGenreStats(): Promise<Array<{ genre: string; count: number }>> {
+  const allItems = await db.select().from(items);
+  const genreCounts: Record<string, number> = {};
+  for (const item of allItems) {
+    const meta = parseMetadata(item.metadata);
+    if (meta.genres) {
+      for (const g of meta.genres) {
+        genreCounts[g] = (genreCounts[g] || 0) + 1;
+      }
+    }
+  }
+  return Object.entries(genreCounts)
+    .map(([genre, count]) => ({ genre, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+// Language stats: parse originalLanguage from metadata
+export async function getLanguageStats(): Promise<Array<{ genre: string; count: number }>> {
+  const allItems = await db.select().from(items);
+  const counts: Record<string, number> = {};
+  for (const item of allItems) {
+    const lang = parseMetadata(item.metadata).originalLanguage;
+    if (lang) counts[lang] = (counts[lang] || 0) + 1;
+  }
+  return Object.entries(counts)
+    .map(([genre, count]) => ({ genre, count })) // 'genre' key so GenreChart renders it directly
+    .sort((a, b) => b.count - a.count);
+}
+
+// Rating distribution: count items by user rating
+export async function getRatingDistribution(): Promise<Array<{ rating: number; count: number }>> {
+  const rows = await db
+    .select({
+      rating: items.userRating,
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(items)
+    .where(sql`${items.userRating} IS NOT NULL`)
+    .groupBy(items.userRating);
+  return rows
+    .map((r) => ({ rating: r.rating ?? 0, count: r.count }))
+    .sort((a, b) => a.rating - b.rating);
+}
+
+// --- Custom collections ---
+
+export const cq = {
+  // All collections with item counts + up to 1 cover image.
+  all: () =>
+    db
+      .select({
+        id: collections.id,
+        name: collections.name,
+        count: sql<number>`(SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = ${collections.id})`,
+        cover: sql<string | null>`(
+          SELECT i.image_url FROM collection_items ci
+          JOIN items i ON i.id = ci.item_id
+          WHERE ci.collection_id = ${collections.id} AND i.image_url IS NOT NULL
+          ORDER BY ci.id LIMIT 1
+        )`,
+      })
+      .from(collections)
+      .orderBy(desc(collections.createdAt)),
+  items: (collectionId: number) =>
+    db
+      .select({ item: items })
+      .from(collectionItems)
+      .innerJoin(items, eq(collectionItems.itemId, items.id))
+      .where(eq(collectionItems.collectionId, collectionId)),
+  byId: (id: number) => db.select().from(collections).where(eq(collections.id, id)),
+  forItem: (itemId: number) =>
+    db
+      .select({ collectionId: collectionItems.collectionId })
+      .from(collectionItems)
+      .where(eq(collectionItems.itemId, itemId)),
+};
+
+export async function createCollection(name: string): Promise<number> {
+  const [row] = await db.insert(collections).values({ name }).returning({ id: collections.id });
+  return row.id;
+}
+
+export async function deleteCollection(id: number): Promise<void> {
+  await db.delete(collectionItems).where(eq(collectionItems.collectionId, id));
+  await db.delete(collections).where(eq(collections.id, id));
+}
+
+export async function addToCollection(collectionId: number, itemId: number): Promise<void> {
+  // insert or ignore — unique(collectionId,itemId) guards duplicates
+  await db.insert(collectionItems).values({ collectionId, itemId }).onConflictDoNothing();
+}
+
+export async function removeFromCollection(collectionId: number, itemId: number): Promise<void> {
+  await db
+    .delete(collectionItems)
+    .where(and(eq(collectionItems.collectionId, collectionId), eq(collectionItems.itemId, itemId)));
+}
+
+// --- Settings KV ---
+
+export async function getSetting(key: string): Promise<string | null> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, key));
+  return row?.value ?? null;
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  await db
+    .insert(settings)
+    .values({ key, value })
+    .onConflictDoUpdate({ target: settings.key, set: { value } });
+}
+
+// Whether an item already has synced credits (skip re-sync on detail open).
+export async function hasCredits(itemId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ n: sql<number>`COUNT(*)` })
+    .from(itemCredits)
+    .where(eq(itemCredits.itemId, itemId));
+  return (row?.n ?? 0) > 0;
 }
 
 export type { Item, Category, Status };

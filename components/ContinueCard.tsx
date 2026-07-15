@@ -1,12 +1,14 @@
-import { Icon, Poster, Text } from '@/components/ui';
+import { Icon, Poster, Text, useColors, useThemedStyles } from '@/components/ui';
 import { CATEGORY_ICON, CATEGORY_LABEL } from '@/constants/categories';
-import { colors, radius, space } from '@/constants/theme';
+import { radius, space, type Palette } from '@/constants/theme';
 import { parseProgress, type Item } from '@/db/queries';
 import { Link } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 // Wide featured card for Continue Watching — poster left, meta + progress right.
 export function ContinueCard({ item, width }: { item: Item; width: number }) {
+  const c = useColors();
+  const styles = useThemedStyles(makeStyles);
   const progress = parseProgress(item.progress);
   const line =
     progress.season || progress.episode
@@ -30,12 +32,12 @@ export function ContinueCard({ item, width }: { item: Item; width: number }) {
           <Text variant="bodyStrong" numberOfLines={2}>
             {item.title}
           </Text>
-          <Text variant="micro" color={colors.textMuted} style={styles.line}>
+          <Text variant="micro" muted style={styles.line}>
             {line.toUpperCase()}
           </Text>
           <View style={styles.playRow}>
-            <Icon name="play-circle" size={18} color={colors.accent} />
-            <Text variant="micro" color={colors.accent}>
+            <Icon name="play-circle" size={18} color={c.accent} />
+            <Text variant="micro" color={c.accent}>
               CONTINUE
             </Text>
           </View>
@@ -45,18 +47,17 @@ export function ContinueCard({ item, width }: { item: Item; width: number }) {
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    gap: space.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: space.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
-  info: { flex: 1, justifyContent: 'center' },
-  line: { marginTop: 4 },
-  playRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: space.md },
-});
+const makeStyles = (c: Palette) =>
+  StyleSheet.create({
+    card: {
+      flexDirection: 'row',
+      gap: space.md,
+      backgroundColor: c.surface,
+      borderRadius: radius.lg,
+      padding: space.md,
+    },
+    pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+    info: { flex: 1, justifyContent: 'center' },
+    line: { marginTop: 4 },
+    playRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: space.md },
+  });

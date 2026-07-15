@@ -1,7 +1,7 @@
-import { colors } from '@/constants/theme';
+import { useColors } from '@/components/ui';
 import { Ionicons } from '@expo/vector-icons';
-import { router, Tabs } from 'expo-router';
-import { StyleSheet, View, type ColorValue } from 'react-native';
+import { Tabs } from 'expo-router';
+import { type ColorValue } from 'react-native';
 
 type Ion = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -11,25 +11,20 @@ function icon(name: Ion) {
   );
 }
 
-// Center Add tab rendered as a raised accent button (matches the mockup's FAB).
-function addIcon() {
-  return (
-    <View style={styles.fab}>
-      <Ionicons name="add" size={28} color={colors.onAccent} />
-    </View>
-  );
-}
-
+// Poptime footer-nav: red active tint on the app background.
 export default function TabLayout() {
+  const c = useColors();
+
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textFaint,
+        tabBarActiveTintColor: c.accent,
+        tabBarInactiveTintColor: c.textMuted,
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
+          backgroundColor: c.bg,
+          borderTopColor: c.border,
           height: 62,
           paddingBottom: 8,
           paddingTop: 6,
@@ -38,36 +33,9 @@ export default function TabLayout() {
       }}>
       <Tabs.Screen name="index" options={{ title: 'Home', tabBarIcon: icon('home') }} />
       <Tabs.Screen name="explore" options={{ title: 'Explore', tabBarIcon: icon('search') }} />
-      <Tabs.Screen
-        name="add"
-        options={{ title: '', tabBarIcon: addIcon, tabBarAccessibilityLabel: 'Add song' }}
-        listeners={{
-          tabPress: (e) => {
-            // Open the manual-add form directly instead of showing a redundant screen.
-            e.preventDefault();
-            router.push('/manual');
-          },
-        }}
-      />
       <Tabs.Screen name="library" options={{ title: 'Library', tabBarIcon: icon('albums') }} />
       <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: icon('person') }} />
     </Tabs>
   );
 }
 
-const styles = StyleSheet.create({
-  fab: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    shadowColor: colors.accent,
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 6,
-  },
-});

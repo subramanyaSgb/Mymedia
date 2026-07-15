@@ -1,5 +1,4 @@
-import { SpaceGrotesk_700Bold, useFonts } from '@expo-google-fonts/space-grotesk';
-import { DarkTheme, Stack, ThemeProvider, router } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavThemeProvider, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -7,21 +6,8 @@ import { Alert } from 'react-native';
 import 'react-native-reanimated';
 
 import { checkForUpdate } from '@/api/updates';
-import { colors } from '@/constants/theme';
+import { ThemeProvider, useColors, useScheme } from '@/components/ui';
 import { DatabaseProvider } from '@/db/provider';
-
-// App is dark-only. Nav theme uses our tokens so chrome matches the screens.
-const navTheme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    background: colors.bg,
-    card: colors.bg,
-    text: colors.text,
-    border: colors.border,
-    primary: colors.accent,
-  },
-};
 
 // One-shot update check on launch: prompt the user if a newer release exists.
 function useUpdatePrompt() {
@@ -48,49 +34,60 @@ export {
 } from 'expo-router';
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
   initialRouteName: '(tabs)',
 };
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [loaded] = useFonts({ SpaceGrotesk_700Bold });
-
-  // Hide the splash once fonts resolve OR after a short timeout — never gate the
-  // whole app on font loading, or a font failure leaves a permanent blank screen.
+  // Roboto is the Android system font — nothing to load; hide splash on first frame.
   useEffect(() => {
-    const t = setTimeout(() => SplashScreen.hideAsync().catch(() => {}), 500);
-    if (loaded) SplashScreen.hideAsync().catch(() => {});
-    return () => clearTimeout(t);
-  }, [loaded]);
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
 
-  return <RootLayoutNav />;
+  return (
+    <ThemeProvider>
+      <RootLayoutNav />
+    </ThemeProvider>
+  );
 }
 
 function RootLayoutNav() {
   useUpdatePrompt();
+  const { scheme } = useScheme();
+  const c = useColors();
+
+  const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
+  const navTheme = {
+    ...base,
+    colors: {
+      ...base.colors,
+      background: c.bg,
+      card: c.bg,
+      text: c.text,
+      border: c.border,
+      primary: c.accent,
+    },
+  };
 
   return (
-    <ThemeProvider value={navTheme}>
-      <StatusBar style="light" />
+    <NavThemeProvider value={navTheme}>
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <DatabaseProvider>
         <Stack
           screenOptions={{
-            headerStyle: { backgroundColor: colors.bg },
-            headerTintColor: colors.text,
+            headerStyle: { backgroundColor: c.bg },
+            headerTintColor: c.text,
             headerShadowVisible: false,
-            contentStyle: { backgroundColor: colors.bg },
+            contentStyle: { backgroundColor: c.bg },
             headerBackTitle: 'Back',
           }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="item/[id]" />
           <Stack.Screen name="list/[...spec]" />
-          <Stack.Screen name="manual" options={{ presentation: 'modal' }} />
           <Stack.Screen name="about" />
         </Stack>
       </DatabaseProvider>
-    </ThemeProvider>
+    </NavThemeProvider>
   );
 }

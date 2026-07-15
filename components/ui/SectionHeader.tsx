@@ -1,15 +1,12 @@
-import { colors, space } from '@/constants/theme';
+import { space } from '@/constants/theme';
 import { StyleSheet, View } from 'react-native';
 import { Text } from './Text';
 
-// Quiet uppercase kicker used as the section label across all screens.
-// One consistent device instead of three different "section title" styles.
+// Poptime section title: bold heading + optional right slot ("View all").
 export function SectionHeader({ title, right }: { title: string; right?: React.ReactNode }) {
   return (
     <View style={styles.row}>
-      <Text variant="kicker" color={colors.textMuted}>
-        {title.toUpperCase()}
-      </Text>
+      <Text variant="h2">{title}</Text>
       {right}
     </View>
   );

@@ -1,14 +1,15 @@
-import { colors, space } from '@/constants/theme';
+import { space } from '@/constants/theme';
 import { StyleSheet, View } from 'react-native';
 import { Text } from './Text';
+import { useColors } from './theme-context';
 
-// One stat tile, used identically by Home and Profile.
-// De-boxed: white numbers, hairline separators — data breathes instead of sitting in a card.
+// One stat tile, used by Home and Profile. Hairline-divided row — data breathes, no card box.
 export function Stat({ label, value }: { label: string; value: number | string }) {
+  const c = useColors();
   return (
     <View style={styles.stat}>
       <Text variant="h1">{value}</Text>
-      <Text variant="micro" color={colors.textFaint} center>
+      <Text variant="micro" color={c.textFaint} center>
         {label.toUpperCase()}
       </Text>
     </View>
@@ -16,13 +17,13 @@ export function Stat({ label, value }: { label: string; value: number | string }
 }
 
 export function StatRow({ children }: { children: React.ReactNode }) {
-  // Interleave hairline dividers between stats.
+  const c = useColors();
   const kids = Array.isArray(children) ? children : [children];
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, { borderColor: c.border }]}>
       {kids.map((k, i) => (
         <View key={i} style={styles.cell}>
-          {i > 0 ? <View style={styles.divider} /> : null}
+          {i > 0 ? <View style={[styles.divider, { backgroundColor: c.border }]} /> : null}
           {k}
         </View>
       ))}
@@ -36,9 +37,8 @@ const styles = StyleSheet.create({
     paddingVertical: space.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   cell: { flex: 1, flexDirection: 'row' },
-  divider: { width: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+  divider: { width: StyleSheet.hairlineWidth },
   stat: { flex: 1, alignItems: 'center', gap: 6 },
 });

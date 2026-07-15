@@ -1,11 +1,13 @@
 import { checkForUpdate, currentVersion, RELEASES_PAGE, type UpdateInfo } from '@/api/updates';
-import { Button, Card, haptic, Icon, Text } from '@/components/ui';
-import { colors, radius, space } from '@/constants/theme';
+import { Button, Card, haptic, Icon, Text, useColors, useThemedStyles } from '@/components/ui';
+import { radius, space, type Palette } from '@/constants/theme';
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 export default function AboutScreen() {
+  const c = useColors();
+  const styles = useThemedStyles(makeStyles);
   const [info, setInfo] = useState<UpdateInfo | null>(null);
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +38,7 @@ export default function AboutScreen() {
       <Stack.Screen options={{ title: 'About' }} />
 
       <View style={styles.logo}>
-        <Icon name="film" size={30} color={colors.accent} />
+        <Icon name="film" size={30} color={c.accent} />
       </View>
       <Text variant="display" center>
         MyMedia
@@ -44,37 +46,37 @@ export default function AboutScreen() {
       <Text variant="caption" muted center style={styles.tagline}>
         Everything you watch, in one place.
       </Text>
-      <Text variant="caption" color={colors.textFaint} center>
+      <Text variant="caption" color={c.textFaint} center>
         Version {currentVersion}
       </Text>
 
       <Card style={styles.card}>
         {checking ? (
           <View style={styles.rowCenter}>
-            <ActivityIndicator color={colors.accent} />
+            <ActivityIndicator color={c.accent} />
             <Text variant="caption" muted>
               Checking for updates…
             </Text>
           </View>
         ) : error ? (
           <View style={styles.rowCenter}>
-            <Icon name="cloud-offline-outline" size={18} color={colors.danger} />
-            <Text variant="caption" color={colors.danger} center>
+            <Icon name="cloud-offline-outline" size={18} color={c.danger} />
+            <Text variant="caption" color={c.danger} center>
               {error}
             </Text>
           </View>
         ) : info?.available ? (
           <View style={styles.updateBlock}>
             <View style={styles.rowCenter}>
-              <Icon name="arrow-up-circle" size={18} color={colors.accent} />
+              <Icon name="arrow-up-circle" size={18} color={c.accent} />
               <Text variant="bodyStrong">Update available: v{info.latest}</Text>
             </View>
             <Button label="Download update" icon="download-outline" onPress={download} style={styles.dlBtn} />
           </View>
         ) : (
           <View style={styles.rowCenter}>
-            <Icon name="checkmark-circle" size={18} color={colors.success} />
-            <Text variant="caption" color={colors.success}>
+            <Icon name="checkmark-circle" size={18} color={c.success} />
+            <Text variant="caption" color={c.success}>
               You're on the latest version.
             </Text>
           </View>
@@ -82,12 +84,12 @@ export default function AboutScreen() {
       </Card>
 
       <Pressable onPress={check} style={styles.linkBtn} accessibilityRole="button">
-        <Text variant="caption" color={colors.accent}>
+        <Text variant="caption" color={c.accent}>
           Check again
         </Text>
       </Pressable>
       <Pressable onPress={() => Linking.openURL(RELEASES_PAGE)} style={styles.linkBtn} accessibilityRole="button">
-        <Text variant="caption" color={colors.textMuted}>
+        <Text variant="caption" color={c.textMuted}>
           All releases on GitHub
         </Text>
       </Pressable>
@@ -95,13 +97,13 @@ export default function AboutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg, padding: space.xl, alignItems: 'center' },
+const makeStyles = (c: Palette) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: c.bg, padding: space.xl, alignItems: 'center' },
   logo: {
     width: 64,
     height: 64,
     borderRadius: radius.lg,
-    backgroundColor: colors.accentDim,
+    backgroundColor: c.accentDim,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: space.xl,

@@ -1,7 +1,8 @@
-import { colors, space } from '@/constants/theme';
+import { space } from '@/constants/theme';
 import { StyleSheet, View } from 'react-native';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
+import { useColors } from './theme-context';
 
 // One composed empty state used everywhere a list can be empty.
 export function EmptyState({
@@ -13,10 +14,11 @@ export function EmptyState({
   title: string;
   subtitle?: string;
 }) {
+  const c = useColors();
   return (
     <View style={styles.wrap}>
-      <View style={styles.iconWrap}>
-        <Icon name={icon} size={28} color={colors.textFaint} />
+      <View style={[styles.iconWrap, { backgroundColor: c.surface }]}>
+        <Icon name={icon} size={28} color={c.textMuted} />
       </View>
       <Text variant="h2" center>
         {title}
@@ -36,9 +38,6 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: space.sm,

@@ -1,13 +1,14 @@
-import { colors, radius, space } from '@/constants/theme';
+import { radius, space, type Palette } from '@/constants/theme';
 import { Pressable, StyleSheet, type ViewStyle } from 'react-native';
 import { haptic } from './feedback';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
+import { useColors } from './theme-context';
 
-type Variant = 'primary' | 'ghost' | 'danger';
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 
-// One button for the whole app (replaces saveBtn/dlBtn/delete-text variants).
-// Includes tactile press feedback and a 48px min height for accessible tap targets.
+// Poptime pill button: red primary, amber secondary; pressed state darkens to near-black
+// (the template's hover behavior). 48px min height for accessible targets.
 export function Button({
   label,
   onPress,
@@ -25,7 +26,8 @@ export function Button({
   style?: ViewStyle;
   accessibilityLabel?: string;
 }) {
-  const v = VARIANTS[variant];
+  const c = useColors();
+  const v = variants(c)[variant];
   return (
     <Pressable
       accessibilityRole="button"
@@ -38,24 +40,30 @@ export function Button({
       }}
       style={({ pressed }) => [
         styles.base,
-        { backgroundColor: v.bg, borderColor: v.border },
+        { backgroundColor: pressed && v.pressedBg ? v.pressedBg : v.bg, borderColor: v.border },
         pressed && styles.pressed,
         disabled && styles.disabled,
         style,
       ]}>
-      {icon ? <Icon name={icon} size={18} color={v.fg} /> : null}
-      <Text variant="bodyStrong" color={v.fg}>
-        {label}
-      </Text>
+      {({ pressed }) => (
+        <>
+          {icon ? <Icon name={icon} size={18} color={pressed && v.pressedFg ? v.pressedFg : v.fg} /> : null}
+          <Text variant="bodyStrong" color={pressed && v.pressedFg ? v.pressedFg : v.fg}>
+            {label}
+          </Text>
+        </>
+      )}
     </Pressable>
   );
 }
 
-const VARIANTS: Record<Variant, { bg: string; fg: string; border: string }> = {
-  primary: { bg: colors.accent, fg: colors.onAccent, border: colors.accent },
-  ghost: { bg: colors.surfaceHi, fg: colors.text, border: colors.border },
-  danger: { bg: 'transparent', fg: colors.danger, border: colors.border },
-};
+const variants = (c: Palette) =>
+  ({
+    primary: { bg: c.accent, fg: c.onAccent, border: c.accent, pressedBg: '#020B10', pressedFg: '#ffffff' },
+    secondary: { bg: c.accent2, fg: c.onAccent2, border: c.accent2, pressedBg: '#020B10', pressedFg: '#ffffff' },
+    ghost: { bg: c.surface, fg: c.text, border: c.border, pressedBg: c.surfaceHi, pressedFg: c.text },
+    danger: { bg: 'transparent', fg: c.danger, border: c.border, pressedBg: c.surfaceHi, pressedFg: c.danger },
+  }) as const;
 
 const styles = StyleSheet.create({
   base: {
@@ -64,10 +72,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.pill,
     borderWidth: 1,
-    paddingHorizontal: space.lg,
+    paddingHorizontal: space.xl,
   },
-  pressed: { transform: [{ scale: 0.98 }], opacity: 0.9 },
+  pressed: { transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.45 },
 });

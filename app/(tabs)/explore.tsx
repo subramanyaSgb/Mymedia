@@ -1,17 +1,20 @@
 import { ensureRuntime } from '@/api/runtime';
 import { searchJikan } from '@/api/jikan';
+import { syncItemData } from '@/api/sync';
 import { searchTmdb, tmdbConfigured } from '@/api/tmdb';
 import type { SearchResult } from '@/api/types';
-import { Chip, EmptyState, haptic, Icon, Poster, Screen, Skeleton, Text } from '@/components/ui';
+import { StatusPicker } from '@/components/StatusPicker';
+import { LANGUAGES } from '@/constants/languages';
+import { Chip, EmptyState, haptic, Icon, Poster, Screen, Skeleton, Text, useColors, useThemedStyles } from '@/components/ui';
 import { useDebounced } from '@/components/useDebounced';
-import { CATEGORY_ICON, STATUS_LABEL } from '@/constants/categories';
-import { colors, radius, space } from '@/constants/theme';
+import { CATEGORY_ICON } from '@/constants/categories';
+import { radius, space, type Palette } from '@/constants/theme';
 import { addItem, deleteBySource, q } from '@/db/queries';
 import type { Category, Item, Status } from '@/db/schema';
 import { useLiveQuery } from 'drizzle-orm/expo-sqlite';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActionSheetIOS, Alert, FlatList, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 const TABS: { key: Category; label: string }[] = [
   { key: 'movie', label: 'Movies' },
@@ -19,7 +22,22 @@ const TABS: { key: Category; label: string }[] = [
   { key: 'anime', label: 'Anime' },
 ];
 
+async function runSearch(tab: Category, query: string): Promise<SearchResult[]> {
+  if (tab === 'anime') return searchJikan(query);
+  return searchTmdb(tab as 'movie' | 'series', query);
+}
+
+const readMeta = (item: { metadata?: string | null }) => {
+  try {
+    return JSON.parse(item.metadata ?? '{}');
+  } catch {
+    return {};
+  }
+};
+
 export default function ExploreScreen() {
+  const c = useColors();
+  const styles = useThemedStyles(makeStyles);
   const params = useLocalSearchParams<{ category?: Category }>();
   const [tab, setTab] = useState<Category>(params.category ?? 'movie');
   const [query, setQuery] = useState('');
@@ -43,8 +61,7 @@ export default function ExploreScreen() {
       setLoading(true);
       setError(null);
       try {
-        const hits =
-          tab === 'anime' ? await searchJikan(debounced) : await searchTmdb(tab as 'movie' | 'series', debounced);
+        const hits = await runSearch(tab, debounced);
         if (!cancelled) setResults(hits);
       } catch (e: any) {
         if (!cancelled) {
@@ -68,6 +85,7 @@ export default function ExploreScreen() {
     try {
       const id = await addItem({ ...r, status });
       haptic.success();
+      if (r.source === 'tmdb') syncItemData(id, r.sourceId, r.category);
       if (status === 'finished') ensureRuntime({ ...r, id, status } as unknown as Item);
     } catch {
       haptic.warning();
@@ -81,48 +99,41 @@ export default function ExploreScreen() {
     haptic.light();
   };
 
-  // Long-press → pick a status. Tap → quick-add as "Want".
-  const pickStatus = (r: SearchResult) => {
-    const options: Status[] = ['want', 'watching', 'finished'];
-    const labels = options.map((s) => STATUS_LABEL[s]);
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: [...labels, 'Cancel'], cancelButtonIndex: 3, title: r.title },
-        (i) => {
-          if (i < 3) doAdd(r, options[i]);
-        }
-      );
-    } else {
-      Alert.alert(
-        r.title,
-        'Add to which list?',
-        [
-          ...options.map((s) => ({ text: STATUS_LABEL[s], onPress: () => doAdd(r, s) })),
-          { text: 'Cancel', style: 'cancel' as const },
-        ],
-        { cancelable: true } // tap outside to dismiss without choosing
-      );
-    }
-  };
+  // Long-press → themed status sheet. Tap → quick-add as "Want".
+  const [pending, setPending] = useState<SearchResult | null>(null);
 
-  const needsToken = tab !== 'anime' && !tmdbConfigured();
-  const showEmpty = !loading && !error && debounced.trim().length >= 2 && results.length === 0 && !needsToken;
+  // Language filter — only meaningful for TMDB results (movies/series).
+  const [language, setLanguage] = useState<string | 'all'>('all');
+  const isTmdbTab = tab === 'movie' || tab === 'series';
+  const shown =
+    isTmdbTab && language !== 'all'
+      ? results.filter((r) => {
+          try {
+            return JSON.parse(r.metadata ?? '{}').originalLanguage === language;
+          } catch {
+            return false;
+          }
+        })
+      : results;
+
+  const needsToken = isTmdbTab && !tmdbConfigured();
+  const showEmpty = !loading && !error && debounced.trim().length >= 2 && shown.length === 0 && !needsToken;
 
   return (
     <Screen scroll={false} padded={false}>
       <View style={styles.header}>
-        <Text variant="caption" color={colors.textFaint}>
+        <Text variant="caption" color={c.textFaint}>
           Movies · Series · Anime
         </Text>
         <Text variant="display" style={styles.title}>
           Explore
         </Text>
         <View style={styles.searchWrap}>
-          <Icon name="search" size={18} color={colors.textMuted} />
+          <Icon name="search" size={18} color={c.textMuted} />
           <TextInput
             style={styles.search}
             placeholder="Search titles…"
-            placeholderTextColor={colors.textFaint}
+            placeholderTextColor={c.textFaint}
             value={query}
             onChangeText={setQuery}
             autoCorrect={false}
@@ -130,11 +141,11 @@ export default function ExploreScreen() {
           />
           {query.length > 0 ? (
             <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityLabel="Clear search">
-              <Icon name="close-circle" size={18} color={colors.textFaint} />
+              <Icon name="close-circle" size={18} color={c.textFaint} />
             </Pressable>
           ) : null}
         </View>
-        <View style={styles.tabs}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
           {TABS.map((t) => (
             <Chip
               key={t.key}
@@ -144,8 +155,16 @@ export default function ExploreScreen() {
               onPress={() => setTab(t.key)}
             />
           ))}
-        </View>
-        <Text variant="micro" color={colors.textFaint} style={styles.hint}>
+        </ScrollView>
+        {isTmdbTab ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.langRow}>
+            <Chip label="All" active={language === 'all'} onPress={() => setLanguage('all')} />
+            {LANGUAGES.map((l) => (
+              <Chip key={l.code} label={l.label} active={language === l.code} onPress={() => setLanguage(l.code)} />
+            ))}
+          </ScrollView>
+        ) : null}
+        <Text variant="micro" color={c.textFaint} style={styles.hint}>
           Tap + to add · long-press to pick a list · tap ✓ to remove
         </Text>
       </View>
@@ -180,7 +199,7 @@ export default function ExploreScreen() {
         </View>
       ) : (
         <FlatList
-          data={results}
+          data={shown}
           keyExtractor={(r) => r.key}
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
@@ -196,28 +215,42 @@ export default function ExploreScreen() {
                   fallbackIcon={CATEGORY_ICON[item.category]}
                 />
                 <View style={styles.rowInfo}>
-                  <Text variant="bodyStrong" numberOfLines={2}>
+                  <Text variant="bodyStrong" numberOfLines={2} ellipsizeMode="tail" style={styles.rowTitle}>
                     {item.title}
                   </Text>
                   <View style={styles.metaLine}>
-                    <Text variant="micro" color={colors.textMuted}>
+                    <Text variant="micro" color={c.textMuted}>
                       {item.year ?? '—'}
                     </Text>
                     {item.catalogRating ? (
                       <>
-                        <Icon name="star" size={11} color={colors.accent} />
-                        <Text variant="micro" color={colors.textMuted}>
+                        <Icon name="star" size={11} color={c.accent} />
+                        <Text variant="micro" color={c.textMuted}>
                           {item.catalogRating.toFixed(1)}
                         </Text>
                       </>
                     ) : null}
                   </View>
+                  {item.metadata ? (() => {
+                    try {
+                      const meta = JSON.parse(item.metadata);
+                      return meta.genres?.length > 0 ? (
+                        <View style={styles.genresRow}>
+                          {meta.genres.slice(0, 2).map((g: string, idx: number) => (
+                            <Chip key={idx} label={g} />
+                          ))}
+                        </View>
+                      ) : null;
+                    } catch {
+                      return null;
+                    }
+                  })() : null}
                 </View>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={isAdded ? `Remove ${item.title}` : `Add ${item.title}`}
                   onPress={() => (isAdded ? remove(item) : doAdd(item, 'want'))}
-                  onLongPress={() => !isAdded && pickStatus(item)}
+                  onLongPress={() => !isAdded && setPending(item)}
                   delayLongPress={280}
                   hitSlop={8}
                   style={({ pressed }) => [
@@ -225,45 +258,57 @@ export default function ExploreScreen() {
                     isAdded && styles.addBtnDone,
                     pressed && { transform: [{ scale: 0.92 }] },
                   ]}>
-                  <Icon name={isAdded ? 'checkmark' : 'add'} size={22} color={colors.onAccent} />
+                  <Icon name={isAdded ? 'checkmark' : 'add'} size={22} color={c.onAccent} />
                 </Pressable>
               </View>
             );
           }}
         />
       )}
+
+      <StatusPicker
+        visible={pending != null}
+        title={pending?.title ?? ''}
+        category={pending?.category}
+        subtitle="Add to which list?"
+        onSelect={(s) => pending && doAdd(pending, s)}
+        onClose={() => setPending(null)}
+      />
     </Screen>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c: Palette) => StyleSheet.create({
   header: { paddingHorizontal: space.lg, paddingTop: space.lg },
   title: { marginBottom: space.md },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    backgroundColor: colors.surface,
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: c.border,
     borderRadius: radius.md,
     paddingHorizontal: space.md,
   },
-  search: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 12 },
-  tabs: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
+  search: { flex: 1, color: c.text, fontSize: 15, paddingVertical: 12 },
+  tabs: { flexDirection: 'row', gap: space.sm, marginTop: space.md, paddingRight: space.lg },
+  langRow: { flexDirection: 'row', gap: space.sm, marginTop: space.sm, paddingRight: space.lg },
   hint: { marginTop: space.sm },
   pad: { paddingHorizontal: space.lg },
   list: { padding: space.lg, gap: space.md },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   rowInfo: { flex: 1 },
+  rowTitle: { width: '100%' },
   metaLine: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
+  genresRow: { flexDirection: 'row', gap: space.xs, marginTop: space.xs, flexWrap: 'wrap' },
   addBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.accent,
+    backgroundColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addBtnDone: { backgroundColor: colors.success },
+  addBtnDone: { backgroundColor: c.success },
 });
