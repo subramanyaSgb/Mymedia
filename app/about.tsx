@@ -1,3 +1,4 @@
+import { downloadAndInstall } from '@/api/installUpdate';
 import { checkForUpdate, currentVersion, RELEASES_PAGE, type UpdateInfo } from '@/api/updates';
 import { Button, Card, haptic, Icon, Text, useColors, useThemedStyles } from '@/components/ui';
 import { radius, space, type Palette } from '@/constants/theme';
@@ -28,9 +29,24 @@ export default function AboutScreen() {
     check();
   }, []);
 
-  const download = () => {
+  // In-app download with progress, then the system installer takes over.
+  // Browser fallback only if the in-app path fails.
+  const [progress, setProgress] = useState<number | null>(null);
+  const download = async () => {
     haptic.light();
-    Linking.openURL(info?.apkUrl ?? RELEASES_PAGE);
+    if (!info?.apkUrl) {
+      Linking.openURL(RELEASES_PAGE);
+      return;
+    }
+    try {
+      setProgress(0);
+      await downloadAndInstall(info.apkUrl, setProgress);
+      setProgress(null);
+    } catch {
+      setProgress(null);
+      haptic.warning();
+      Linking.openURL(info.apkUrl); // fallback: browser download
+    }
   };
 
   return (
@@ -71,7 +87,18 @@ export default function AboutScreen() {
               <Icon name="arrow-up-circle" size={18} color={c.accent} />
               <Text variant="bodyStrong">Update available: v{info.latest}</Text>
             </View>
-            <Button label="Download update" icon="download-outline" onPress={download} style={styles.dlBtn} />
+            {progress != null ? (
+              <View style={styles.progressWrap}>
+                <View style={styles.progressTrack}>
+                  <View style={[styles.progressFill, { width: `${Math.max(progress, 3)}%` }]} />
+                </View>
+                <Text variant="micro" color={c.textMuted}>
+                  {progress < 100 ? `Downloading… ${progress}%` : 'Opening installer…'}
+                </Text>
+              </View>
+            ) : (
+              <Button label="Download & install" icon="download-outline" onPress={download} style={styles.dlBtn} />
+            )}
           </View>
         ) : (
           <View style={styles.rowCenter}>
@@ -114,5 +141,14 @@ const makeStyles = (c: Palette) => StyleSheet.create({
   rowCenter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm },
   updateBlock: { alignItems: 'center', gap: space.md },
   dlBtn: { alignSelf: 'stretch' },
+  progressWrap: { alignSelf: 'stretch', alignItems: 'center', gap: space.sm },
+  progressTrack: {
+    alignSelf: 'stretch',
+    height: 8,
+    borderRadius: radius.pill,
+    backgroundColor: c.surfaceHi,
+    overflow: 'hidden',
+  },
+  progressFill: { height: 8, borderRadius: radius.pill, backgroundColor: c.accent },
   linkBtn: { paddingVertical: space.md, minHeight: 44, justifyContent: 'center' },
 });
